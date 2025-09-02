@@ -1,4 +1,4 @@
-# EventHive 🎉  
+# EventHive 
 Smart Event Networking Platform (MERN + Vite + Tailwind + shadcn/ui)
 
 ## Overview
@@ -45,59 +45,6 @@ It is designed to demonstrate real-world app flows like QR check-in, agendas, sp
 
 ---
 
-## Project Structure
-
-### Frontend (`/frontend`)
-frontend/
-├── public/ # Static assets (served as-is)
-├── src/
-│ ├── api/ # Axios API wrappers
-│ │ ├── axiosConfig.js
-│ │ └── userApi.js
-│ ├── components/
-│ │ ├── layout/ # Navbar, Footer, AppShell
-│ │ ├── home/ # Homepage sections (Hero, Features, etc.)
-│ │ └── ui/ # Generated shadcn/ui components
-│ ├── context/ # React Context (Auth, Events, etc.)
-│ ├── hooks/ # Custom hooks
-│ ├── pages/ # Page-level components
-│ │ ├── Home.jsx
-│ │ └── Builder.jsx
-│ ├── routing/ # AppRoutes
-│ │ └── AppRoutes.jsx
-│ ├── styles/ # Tailwind + globals
-│ │ └── globals.css
-│ ├── App.jsx
-│ ├── main.jsx
-│ └── index.css
-├── package.json
-
-### Backend (`/backend`)
-backend/
-├── src/
-│ ├── config/ # env + database config
-│ │ └── db.js
-│ ├── controllers/ # Route controllers
-│ │ └── eventController.js
-│ ├── middleware/ # Error handling, auth, rate limit
-│ │ └── authMiddleware.js
-│ ├── models/ # Mongoose models
-│ │ ├── User.js
-│ │ ├── Event.js
-│ │ └── Ticket.js
-│ ├── routes/ # Express routes
-│ │ ├── userRoutes.js
-│ │ └── eventRoutes.js
-│ ├── utils/ # Helpers (jwt, mail, etc.)
-│ │ ├── jwt.js
-│ │ └── email.js
-│ ├── validation/ # Zod schemas
-│ │ └── eventValidation.js
-│ ├── tests/ # Jest + Supertest tests
-│ ├── app.js # Express app config
-│ └── server.js # Entry point
-├── .env.example
-├── package.json
 
 ## Demo Workflow (Simulating an Event)
 
