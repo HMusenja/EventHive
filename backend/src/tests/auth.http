@@ -1,0 +1,26 @@
+### Register
+POST http://localhost:5000/api/users/register
+Content-Type: application/json
+
+{
+  "fullName": "Test two",
+  "username": "test_2",
+  "email": "test2@mail.com",
+  "password": "1234"
+  
+}
+
+### Login
+POST http://localhost:5000/api/users/login
+Content-Type: application/json
+
+{
+  "email": "test2@mail.com",
+  "password": "1234"
+}
+
+### Me (cookie must be sent by client; Postman: enable cookie jar)
+GET http://localhost:5000/api/users/me
+
+### Logout
+POST http://localhost:5000/api/users/logout

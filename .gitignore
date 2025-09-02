@@ -1,0 +1,21 @@
+cat > .gitignore << 'EOF'
+# dependencies
+node_modules/
+# builds
+dist/
+build/
+.vite/
+.next/
+coverage/
+# env
+.env
+.env.*
+# logs
+logs/
+*.log
+# OS/editor junk
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+EOF
