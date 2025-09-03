@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Menu, Search, User } from "lucide-react";
 
@@ -8,7 +9,8 @@ export default function Navbar() {
         <div className="flex h-16 items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-lg bg-gradient-vibrant shadow-vibrant" />
-            <span className="text-xl font-bold">EventHub</span>
+            {/* make EventHub clickable */}
+            <a href="/" className="text-xl font-bold hover:opacity-80">EventHub</a>
           </div>
 
           <nav className="hidden md:flex items-center gap-8 text-sm">
