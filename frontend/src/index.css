@@ -149,3 +149,24 @@ All colors MUST be HSL.
   .shadow-vibrant  { box-shadow: var(--shadow-vibrant); }
   .shadow-electric { box-shadow: var(--shadow-electric); }
 }
+/* Glass card + input helpers */
+.glass-effect {
+  @apply bg-white/10 dark:bg-black/20 backdrop-blur-xl shadow-lg;
+}
+
+.glass-input {
+  @apply bg-white/10 dark:bg-white/5 backdrop-blur border border-white/20 focus:border-primary focus:ring-0;
+}
+
+/* Fullscreen auth background (optional image-ready) */
+.auth-bg {
+  @apply bg-cover bg-center bg-no-repeat;
+  /* If you want a pure gradient fallback without an image, you can do:
+  background-image: radial-gradient(60% 60% at 10% 10%, rgba(59,130,246,0.12) 0%, transparent 60%),
+                    radial-gradient(60% 60% at 90% 20%, rgba(236,72,153,0.12) 0%, transparent 60%),
+                    radial-gradient(60% 60% at 50% 80%, rgba(16,185,129,0.12) 0%, transparent 60%);
+  */
+}
+.auth-form .text-muted-foreground {
+  @apply text-white/80;
+}

@@ -12,6 +12,7 @@ import {
 } from "./middleware/errorHandler.js";
 
 import userRoutes from "./routes/users.routes.js"
+import eventRoutes from "./routes/events.routes.js";
 
 
 dotenv.config();
@@ -35,6 +36,7 @@ app.use(cookieParser());
 
 // ----------------- Routers -----------------
 app.use("/api/users", userRoutes);
+app.use("/api", eventRoutes);
 
 
 

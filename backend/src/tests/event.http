@@ -1,0 +1,11 @@
+### Get all events
+GET http://localhost:5000/api/events
+
+### Get by slug
+GET http://localhost:5000/api/events/eventhive-2025
+
+### Get by another slug
+GET http://localhost:5000/api/events/techfest-2025
+
+### Get by ObjectId (replace with actual _id from DB)
+GET http://localhost:5000/api/events/64fdbf1234567890abcdef12
