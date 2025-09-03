@@ -35,6 +35,7 @@ export default function Navbar() {
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        {/* 🔧 FIX: add <div> here */}
         <div className="flex h-16 items-center justify-between">
           {/* Brand */}
           <Link to="/" className="flex items-center gap-2">
@@ -44,30 +45,10 @@ export default function Navbar() {
 
           {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-8 text-sm">
-            <a
-              href="#events"
-              className="text-muted-foreground hover:text-foreground"
-            >
-              Events
-            </a>
-            <a
-              href="#features"
-              className="text-muted-foreground hover:text-foreground"
-            >
-              Features
-            </a>
-            <a
-              href="#about"
-              className="text-muted-foreground hover:text-foreground"
-            >
-              About
-            </a>
-            <a
-              href="#blog"
-              className="text-muted-foreground hover:text-foreground"
-            >
-              Blog
-            </a>
+            <a href="#events" className="text-muted-foreground hover:text-foreground">Events</a>
+            <a href="#features" className="text-muted-foreground hover:text-foreground">Features</a>
+            <a href="#about" className="text-muted-foreground hover:text-foreground">About</a>
+            <a href="#blog" className="text-muted-foreground hover:text-foreground">Blog</a>
           </nav>
 
           {/* Right side */}
@@ -103,8 +84,7 @@ export default function Navbar() {
                   className="hidden sm:flex"
                   onClick={() => navigate("/dashboard")}
                 >
-                  <User className="mr-2 h-4 w-4" />{" "}
-                  {user.fullName?.split(" ")[0] || "Profile"}
+                  <User className="mr-2 h-4 w-4" /> {user.fullName?.split(" ")[0] || "Profile"}
                 </Button>
                 <Button
                   variant="ghost"
@@ -120,12 +100,7 @@ export default function Navbar() {
             {/* Mobile menu */}
             <Sheet>
               <SheetTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="md:hidden"
-                  aria-label="Open menu"
-                >
+                <Button variant="ghost" size="sm" className="md:hidden" aria-label="Open menu">
                   <Menu className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
@@ -145,18 +120,10 @@ export default function Navbar() {
                 <div className="mt-6 space-y-4">
                   {/* Nav links */}
                   <div className="grid gap-2">
-                    <a href="#events" className="text-sm text-foreground">
-                      Events
-                    </a>
-                    <a href="#features" className="text-sm text-foreground">
-                      Features
-                    </a>
-                    <a href="#about" className="text-sm text-foreground">
-                      About
-                    </a>
-                    <a href="#blog" className="text-sm text-foreground">
-                      Blog
-                    </a>
+                    <a href="#events" className="text-sm text-foreground">Events</a>
+                    <a href="#features" className="text-sm text-foreground">Features</a>
+                    <a href="#about" className="text-sm text-foreground">About</a>
+                    <a href="#blog" className="text-sm text-foreground">Blog</a>
                   </div>
 
                   <Separator />
@@ -199,11 +166,7 @@ export default function Navbar() {
                           <User className="mr-2 h-4 w-4" /> Dashboard
                         </Button>
                       </SheetClose>
-                      <Button
-                        variant="ghost"
-                        className="justify-start"
-                        onClick={handleLogout}
-                      >
+                      <Button variant="ghost" className="justify-start" onClick={handleLogout}>
                         <LogOut className="mr-2 h-4 w-4" /> Logout
                       </Button>
                     </div>
@@ -216,8 +179,8 @@ export default function Navbar() {
 
         {/* Auth modal (controlled) */}
         <AuthModal
-          isOpen={authOpen} // ✅ match AuthModal API
-          onClose={setAuthOpen} // ✅ shadcn Dialog passes boolean
+          isOpen={authOpen}
+          onClose={setAuthOpen}
           initialMode={authMode}
           onSuccess={handleAuthSuccess}
         />
@@ -225,3 +188,4 @@ export default function Navbar() {
     </header>
   );
 }
+

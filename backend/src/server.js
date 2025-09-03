@@ -11,8 +11,11 @@ import {
   routeNotFound,
 } from "./middleware/errorHandler.js";
 
-import userRoutes from "./routes/users.routes.js"
+
 import eventRoutes from "./routes/events.routes.js";
+import userRoutes from "./routes/users.routes.js";
+import ticketRoutes from "./routes/tickets.routes.js";
+//import paymentRoutes from "./routes/payments.routes.js";
 
 
 dotenv.config();
@@ -36,8 +39,9 @@ app.use(cookieParser());
 
 // ----------------- Routers -----------------
 app.use("/api/users", userRoutes);
+app.use("/api/tickets", ticketRoutes);
 app.use("/api", eventRoutes);
-
+//app.use("/api/payments", paymentRoutes);
 
 
 
@@ -49,8 +53,8 @@ app.use(globalErrorHandler);
 app.listen(PORT, () => {
   console.log(
     ` Server is up and running!\n` +
-      ` Listening on http://localhost:${PORT}\n` +
-      ` Started at: ${new Date().toLocaleString()}\n`
-      
+    ` Listening on http://localhost:${PORT}\n` +
+    ` Started at: ${new Date().toLocaleString()}\n`
+
   );
 });

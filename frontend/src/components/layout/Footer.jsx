@@ -43,7 +43,7 @@ export default function Footer() {
         </div>
 
         <div className="flex flex-col items-center justify-between gap-4 border-t border-background/20 pt-6 sm:flex-row">
-          <p className="text-sm text-background/70">© 2024 EventHub. All rights reserved.</p>
+          <p className="text-sm text-background/70">© 2025 EventHub. All rights reserved.</p>
           <div className="flex gap-6 text-sm text-background/70">
             <a href="#">Privacy</a>
             <a href="#">Terms</a>
