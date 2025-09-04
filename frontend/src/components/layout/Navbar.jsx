@@ -40,7 +40,7 @@ export default function Navbar() {
           {/* Brand */}
           <Link to="/" className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-lg bg-gradient-vibrant shadow-vibrant" />
-            <span className="text-xl font-bold">EventHub</span>
+            <span className="text-xl font-bold">EventHive</span>
           </Link>
 
           {/* Desktop nav */}

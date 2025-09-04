@@ -6,7 +6,7 @@ export default function Footer() {
           <div>
             <div className="mb-4 flex items-center gap-2">
               <div className="h-8 w-8 rounded-lg bg-gradient-vibrant shadow-vibrant" />
-              <span className="text-xl font-bold">EventHub</span>
+              <span className="text-xl font-bold">EventHive</span>
             </div>
             <p className="mb-4 text-background/70">Create and manage unforgettable events.</p>
           </div>
@@ -43,7 +43,7 @@ export default function Footer() {
         </div>
 
         <div className="flex flex-col items-center justify-between gap-4 border-t border-background/20 pt-6 sm:flex-row">
-          <p className="text-sm text-background/70">© 2025 EventHub. All rights reserved.</p>
+          <p className="text-sm text-background/70">© 2025 EventHive. All rights reserved.</p>
           <div className="flex gap-6 text-sm text-background/70">
             <a href="#">Privacy</a>
             <a href="#">Terms</a>
