@@ -5,6 +5,10 @@ import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import EventDetail from "@/pages/EventDetail";
 import EventList from "@/pages/EventList";
+import Tickets from "@/pages/Tickets";
+import RequestMeeting from "@/pages/RequestMeeting";
+import MyMeetings from "@/pages/MyMeetings";
+
 // import Dashboard from "@/pages/Dashboard";
 // import Settings from "@/pages/Settings";
 // import ProtectedRoute from "./ProtectedRoute";
@@ -22,6 +26,11 @@ export default function AppRoutes() {
         <Route path="/events/:id" element={<EventDetail />} />
         <Route path="/events" element={<EventList />} />
         <Route path="/account" element={<AccountLayout />} />
+        <Route path="/events/:id/tickets" element={<Tickets />} />
+        <Route path="/tickets" element={<Tickets />} />
+        <Route path="/events/:eventId/network/request/:userId" element={<RequestMeeting />} />
+        <Route path="/events/:eventId/meetings" element={<MyMeetings />} />
+
 
         {/* Protected */}
         {/* <Route

@@ -1,5 +1,5 @@
 ### Get all events
-GET http://localhost:5000/api/events
+GET http://localhost:5050/api/events
 
 ### Get by slug
 GET http://localhost:5000/api/events/eventhive-2025

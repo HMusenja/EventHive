@@ -16,6 +16,7 @@ import eventRoutes from "./routes/events.routes.js";
 import userRoutes from "./routes/users.routes.js";
 import ticketRoutes from "./routes/tickets.routes.js";
 //import paymentRoutes from "./routes/payments.routes.js";
+import meetingRoutes from "./routes/meetings.routes.js";
 
 
 dotenv.config();
@@ -42,6 +43,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/tickets", ticketRoutes);
 app.use("/api", eventRoutes);
 //app.use("/api/payments", paymentRoutes);
+app.use("/api/meetings", meetingRoutes);
 
 
 
