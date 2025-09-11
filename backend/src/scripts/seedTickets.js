@@ -2,7 +2,7 @@ import "dotenv/config";
 import mongoose from "mongoose";
 import Ticket from "../models/Ticket.js";
 
-const eventId = process.argv[2]; // pass the eventId on the command line
+const eventId = process.argv[2];
 
 async function run() {
     if (!eventId) {
