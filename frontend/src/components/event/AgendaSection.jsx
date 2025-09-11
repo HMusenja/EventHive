@@ -1,10 +1,9 @@
-// src/components/event/AgendaSection.jsx
 export default function AgendaSection({ agenda = [], speakers = [], timezone }) {
   const byName = Object.fromEntries(speakers.map(s => [s.name, s]));
   const fmt = d => new Date(d).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
   return (
-    <section id="agenda" className="container px-4 py-12">
+    <section id="agenda" className="container px-4 py-12 scroll-mt-24">
       <h2 className="text-2xl font-semibold">Agenda</h2>
       <div className="mt-6 grid gap-4">
         {agenda.map((s, i) => (

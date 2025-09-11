@@ -1,4 +1,4 @@
-// src/components/event/EventHero.jsx
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import SmartGetTicketButton from "./SmartGetTicketButton";
@@ -7,6 +7,7 @@ import { Link } from "react-router-dom";
 export default function EventHero({ event, membership, profileUrl, attendeeCount,  memberCount, checkedInCount }) {
   const start = new Date(event.startAt);
   const end = new Date(event.endAt);
+
 
   const dateStr = `${start.toLocaleDateString(undefined, {
     dateStyle: "medium",
@@ -18,6 +19,7 @@ export default function EventHero({ event, membership, profileUrl, attendeeCount
     membership.status !== "rejected";
 
   const pluralize = (n, s, p = s + "s") => `${n} ${n === 1 ? s : p}`;
+
 
   return (
     <section className="relative min-h-[60vh] flex items-end">
@@ -59,10 +61,12 @@ export default function EventHero({ event, membership, profileUrl, attendeeCount
           </div>
         )}
 
+
         <div className="mt-6 flex flex-wrap gap-3">
           <SmartGetTicketButton event={event}>
             Get Tickets
           </SmartGetTicketButton>
+
 
           <Button variant="outline" size="lg" asChild>
             <a href="#agenda">View Agenda</a>

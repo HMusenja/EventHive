@@ -1,4 +1,3 @@
-// backend/src/controllers/tickets.controller.js
 import Ticket from "../models/Ticket.js";
 
 export const listTicketsForEvent = async (req, res, next) => {

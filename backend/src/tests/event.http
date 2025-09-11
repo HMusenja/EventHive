@@ -1,6 +1,8 @@
+
 ### ENV
 @baseUrl = http://localhost:5000
 @frontend = http://localhost:5173
+
 
 # Paste plain JWTs (not cookie strings)
 @authA = Bearer <ORGANIZER_JWT>

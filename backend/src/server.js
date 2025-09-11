@@ -25,6 +25,7 @@ import matchmakingRoutes from "./routes/matches.routes.js"
 import eventMatchRoutes from "./routes/eventMatch.routes.js";
 import { stripeWebhook } from "./controllers/webhookController.js";
 //import paymentRoutes from "./routes/payments.routes.js";
+import meetingRoutes from "./routes/meetings.routes.js";
 
 
 dotenv.config();
@@ -60,6 +61,7 @@ app.use("/api", matchmakingRoutes);
 app.use("/api", eventMatchRoutes);
 
 //app.use("/api/payments", paymentRoutes);
+app.use("/api/meetings", meetingRoutes);
 
 
 
