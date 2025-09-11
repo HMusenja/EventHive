@@ -1,5 +1,5 @@
 // backend/src/models/Event.js
-import { Schema, model } from "mongoose";
+import { Schema, model,Types } from "mongoose";
 
 const SpeakerSchema = new Schema({
   name: { type: String, required: true, trim: true },
@@ -32,18 +32,32 @@ const VenueSchema = new Schema({
   mapEmbedUrl: String, // optional prebuilt embed URL fallback
 }, { _id: false });
 
-const EventSchema = new Schema({
-  slug: { type: String, unique: true, index: true, trim: true },
-  title: { type: String, required: true, trim: true },
-  subtitle: { type: String, default: "" },
-  description: { type: String, default: "" },
-  coverImage: { type: String, default: "" },
-  startAt: { type: Date, required: true },
-  endAt: { type: Date, required: true },
-  timezone: { type: String, default: "Europe/Berlin" },
-  venue: VenueSchema,
-  speakers: [SpeakerSchema],
-  agenda: [SessionSchema],
-}, { timestamps: true });
+const EventSchema = new Schema(
+  {
+    slug: { type: String, unique: true, index: true, trim: true },
+    title: { type: String, required: true, trim: true },
+    subtitle: { type: String, default: "" },
+    description: { type: String, default: "" },
+    coverImage: { type: String, default: "" },
+    onboardingEnabled: { type: Boolean, default: true },
+
+    startAt: { type: Date, required: true },
+    endAt:   { type: Date, required: true },
+    timezone: { type: String, default: "Europe/Berlin" },
+
+    venue: VenueSchema,
+    speakers: [SpeakerSchema],
+    agenda: [SessionSchema],
+
+    // 🔹 NEW: ownership & discovery
+    ownerId: { type: Types.ObjectId, ref: "User", required: true, index: true },
+    orgId:   { type: Types.ObjectId, ref: "Organization" }, // optional
+    visibility: { type: String, enum: ["public", "private"], default: "public" },
+
+    // (optional) simple capacity guard for free tickets or overall cap
+    capacity: { type: Number, default: 0, min: 0 }, // 0 = unlimited
+  },
+  { timestamps: true }
+);
 
 export default model("Event", EventSchema);

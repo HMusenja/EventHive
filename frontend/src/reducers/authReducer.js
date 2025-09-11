@@ -1,51 +1,24 @@
-// src/context/authReducer.js
+export const authReducer = (state, action) => {
 
-export const initialAuthState = {
-  user: null,          // { _id, fullName, email, username, role?, createdAt? }
-  loading: false,      // true during any auth action
-  error: null,         // { status?, message } or string
-  initialized: false,  // becomes true after first /auth/me attempt finishes
-};
 
-export const AUTH_INIT       = "AUTH_INIT";       // start of any auth operation
-export const AUTH_SUCCESS    = "AUTH_SUCCESS";    // user loaded or login success
-export const AUTH_ERROR      = "AUTH_ERROR";      // failed op
-export const AUTH_LOGOUT     = "AUTH_LOGOUT";     // logout success
-export const AUTH_READY      = "AUTH_READY";      // finished initial getMe()
-
-export function authReducer(state, action) {
   switch (action.type) {
-    case AUTH_INIT:
+    case "AUTH_LOADING":
       return { ...state, loading: true, error: null };
-
-    case AUTH_SUCCESS:
+    case "AUTH_SUCCESS":
+      return { ...state, user: action.payload, isAuthenticated: true, loading: false, loaded: true, };
+    case "AUTH_LOGOUT":
+      return { ...state, user: null, isAuthenticated: false, loading: false,loaded: true, };
+    case "AUTH_ERROR":
+      return { ...state, user: null,isAuthenticated: false, loading: false, error: action.payload };
+    case "SET_USER":
       return {
         ...state,
-        user: action.payload || null,
+        user: action.payload,
+        isAuthenticated: !!action.payload,
         loading: false,
-        error: null,
-        initialized: action.initialized ?? state.initialized,
       };
-
-    case AUTH_ERROR:
-      return {
-        ...state,
-        loading: false,
-        error: action.error || { message: "Unknown error" },
-      };
-
-    case AUTH_LOGOUT:
-      return {
-        ...state,
-        user: null,
-        loading: false,
-        error: null,
-      };
-
-    case AUTH_READY:
-      return { ...state, initialized: true, loading: false };
-
     default:
+      console.warn("[AuthReducer] Unknown action type:", action.type);
       return state;
   }
-}
+};

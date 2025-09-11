@@ -6,15 +6,21 @@ import "./index.css";
 
 import { AuthProvider } from "./context/AuthContext.jsx";
 import { EventProvider } from "./context/EventContext.jsx";
+import { ThemeProvider } from "./context/ThemeContext.jsx";
+import { AttendeeProvider } from "./context/AttendeeContext.jsx";
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <BrowserRouter>
-      <AuthProvider>
-        <EventProvider>
-          <App />
-        </EventProvider>
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <EventProvider>
+            <AttendeeProvider>
+              <App />
+            </AttendeeProvider>
+          </EventProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </BrowserRouter>
   </React.StrictMode>
 );
