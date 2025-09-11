@@ -1,11 +1,280 @@
-### Get all events
-GET http://localhost:5050/api/events
 
-### Get by slug
-GET http://localhost:5000/api/events/eventhive-2025
+### ENV
+@baseUrl = http://localhost:5000
+@frontend = http://localhost:5173
 
-### Get by another slug
-GET http://localhost:5000/api/events/techfest-2025
 
-### Get by ObjectId (replace with actual _id from DB)
-GET http://localhost:5000/api/events/64fdbf1234567890abcdef12
+# Paste plain JWTs (not cookie strings)
+@authA = Bearer <ORGANIZER_JWT>
+@authB = Bearer <BUYER_JWT>
+
+# Re-usable IDs (fill these after responses)
+@eventId = <EVENT_ID>
+@ticketId = <PAID_TICKET_ID>
+@freeTicketId = <FREE_TICKET_ID>
+@orderId = <ORDER_ID>
+
+############################
+# 1) AUTH — Register + Login
+############################
+
+### Register User A (Organizer)
+POST {{baseUrl}}/api/users/register
+Content-Type: application/json
+
+{
+  "fullName": "Alice Organizer",
+  "username": "alice_1",
+  "email": "alice@mail.com",
+  "password": "123456"
+}
+
+### Login User A
+POST {{baseUrl}}/api/users/login
+Content-Type: application/json
+
+{
+  "email": "alice@mail.com",
+  "password": "123456"
+}
+# → set @authA
+
+### Register User B (Buyer/Attendee)
+POST {{baseUrl}}/api/users/register
+Content-Type: application/json
+
+{
+  "fullName": "Bob Attendee",
+  "email": "bob@demo.com",
+  "password": "pass12345"
+}
+
+### Login User B
+POST {{baseUrl}}/api/users/login
+Content-Type: application/json
+
+{
+  "email": "bob@demo.com",
+  "password": "pass12345"
+}
+# → set @authB
+
+### Me (cookie-flow sanity; requires cookie jar)
+GET {{baseUrl}}/api/users/me
+
+
+############################
+# 2) EVENTS — Create by A
+############################
+
+### Create Event (User A becomes owner/organizer)
+POST {{baseUrl}}/api/events
+Authorization: {{authA}}
+Content-Type: application/json
+
+{
+  "slug": "eventhive-2026",
+  "title": "eventHive 2026",
+  "subtitle": "Modern event stack",
+  "description": "Hands-on sessions, networking, and demos.",
+  "coverImage": "",
+  "startAt": "2025-10-12T09:00:00.000Z",
+  "endAt": "2025-10-12T18:00:00.000Z",
+  "timezone": "Europe/Berlin",
+  "venue": {
+    "name": "Hamburg Messe",
+    "address": "Messeplatz 1",
+    "city": "Hamburg",
+    "country": "DE"
+  },
+  "visibility": "public"
+}
+# Save: @eventId = <_id>
+
+### Get Event by slug (sanity)
+GET {{baseUrl}}/api/events/eventhive-2026
+
+
+############################
+# 3) TICKETS — Create by A
+############################
+
+### List tickets (empty initially or filtered by time)
+GET {{baseUrl}}/api/tickets?eventId={{eventId}}
+
+### Create a PAID ticket
+POST {{baseUrl}}/api/tickets
+Authorization: {{authA}}
+Content-Type: application/json
+
+{
+  "eventId": "{{eventId}}",
+  "name": "General Admission",
+  "description": "Access to all sessions",
+  "currency": "eur",
+  "priceCents": 1500,
+  "quantityTotal": 100,
+  "salesStartAt": "2025-09-01T08:00:00.000Z",
+  "salesEndAt": "2025-10-12T08:00:00.000Z",
+  "isActive": true
+}
+# Save: @ticketId = <_id>
+
+### Create a FREE ticket (for fast tests)
+POST {{baseUrl}}/api/tickets
+Authorization: {{authA}}
+Content-Type: application/json
+
+{
+  "eventId": "{{eventId}}",
+  "name": "Community Pass",
+  "description": "Free entry",
+  "currency": "eur",
+  "priceCents": 0,
+  "quantityTotal": 10,
+  "salesStartAt": "2025-09-01T08:00:00.000Z",
+  "salesEndAt": "2025-10-12T08:00:00.000Z",
+  "isActive": true
+}
+# Save: @freeTicketId = <_id>
+
+### List tickets for the event (public scope)
+GET {{baseUrl}}/api/tickets?eventId={{eventId}}
+
+### Admin view (see all, bypass time/active if you implemented ?scope=all)
+GET {{baseUrl}}/api/tickets?eventId={{eventId}}&scope=all
+
+
+#############################################
+# 4) CHECKOUT — Create Order / Stripe session
+#############################################
+
+### Start checkout (PAID) as User B
+POST {{baseUrl}}/api/ticketing/checkout
+Authorization: {{authB}}
+Content-Type: application/json
+
+{
+  "eventId": "{{eventId}}",
+  "ticketId": "{{ticketId}}",
+  "quantity": 2
+}
+# Response: { orderId, checkoutUrl }  (status "awaiting_payment")
+# Save: @orderId = <orderId>
+
+### Start checkout (FREE) as User B (fulfills immediately)
+POST {{baseUrl}}/api/ticketing/checkout
+Authorization: {{authB}}
+Content-Type: application/json
+
+{
+  "eventId": "{{eventId}}",
+  "ticketId": "{{freeTicketId}}",
+  "quantity": 1
+}
+# Expected: fulfilled immediately; attendee role upserted.
+
+
+############################################################
+# 5) WEBHOOK / LOCAL FULFILL — simulate Stripe success (dev)
+############################################################
+
+### (DEV ONLY) Fulfill order manually (simulate webhook success)
+POST {{baseUrl}}/api/orders/{{orderId}}/fulfill
+Authorization: {{authA}}
+
+### (REAL) Stripe webhook endpoint (use Stripe CLI to send events)
+# stripe listen --forward-to localhost:5000/api/ticketing/webhook/stripe
+POST {{baseUrl}}/api/ticketing/webhook/stripe
+Content-Type: application/json
+
+{}
+
+
+############################################
+# 6) “MY EVENTS” — Attending / Organizing
+############################################
+
+### As User B: events I’m attending
+GET {{baseUrl}}/api/events/me/attending
+Authorization: {{authB}}
+
+### As User A: events I’m organizing
+GET {{baseUrl}}/api/events/me/organizing
+Authorization: {{authA}}
+
+
+###############################
+# 7) TICKETS / ORDERS overview
+###############################
+
+### List my orders (User B)
+GET {{baseUrl}}/api/orders/me
+Authorization: {{authB}}
+
+### Get one order (User B) — see issued tickets + QR refs
+GET {{baseUrl}}/api/orders/{{orderId}}
+Authorization: {{authB}}
+
+
+#########################
+# 8) CHECK-IN (Organizer)
+#########################
+
+### Scan & check-in a ticket (Organizer only)
+# Body contains orderId + ticketRef from order.tickets[].ref
+POST {{baseUrl}}/api/events/{{eventId}}/checkin
+Authorization: {{authA}}
+Content-Type: application/json
+
+{
+  "orderId": "{{orderId}}",
+  "ticketRef": "TKT_XXXX"
+}
+
+
+#########################
+# 9) REFUND (Organizer)
+#########################
+
+### Refund an order (Organizer/Admin)
+POST {{baseUrl}}/api/orders/{{orderId}}/refund
+Authorization: {{authA}}
+
+
+#############################################
+# 10) NEGATIVE TESTS — capacity / window / active
+#############################################
+
+### Try to buy more than available (expect 400)
+POST {{baseUrl}}/api/ticketing/checkout
+Authorization: {{authB}}
+Content-Type: application/json
+
+{
+  "eventId": "{{eventId}}",
+  "ticketId": "{{ticketId}}",
+  "quantity": 9999
+}
+
+### Try to buy outside sales window (expect 400)
+POST {{baseUrl}}/api/ticketing/checkout
+Authorization: {{authB}}
+Content-Type: application/json
+
+{
+  "eventId": "{{eventId}}",
+  "ticketId": "{{ticketId}}",
+  "quantity": 1
+}
+# (Adjust ticket's salesStartAt / salesEndAt to force failure)
+
+### Try to check-in with invalid ref (expect 404/400)
+POST {{baseUrl}}/api/events/{{eventId}}/checkin
+Authorization: {{authA}}
+Content-Type: application/json
+
+{
+  "orderId": "{{orderId}}",
+  "ticketRef": "TKT_INVALID"
+}

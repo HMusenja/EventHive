@@ -11,16 +11,19 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import Footer from "@/components/layout/Footer";
 
 const AccountLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const navigate = useNavigate();
+    
+
 
   const navigationItems = [
     { name: "Profile", href: "/account/profile", icon: User },
     { name: "Matches", href: "/account/matches", icon: Users },
     { name: "Meetings", href: "/account/meetings", icon: Calendar },
-    { name: "Tickets", href: "/account/tickets", icon: Ticket },
+    { name: "Tickets", href: "/account/my-tickets", icon: Ticket },
     { name: "Settings", href: "/account/settings", icon: Settings },
   ];
 
@@ -49,7 +52,8 @@ const AccountLayout = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
       {/* Header */}
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header className="sticky top-0 z-50 border-b bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-md">
+
         <div className="flex h-16 items-center justify-between px-4 md:px-6">
           {/* Mobile menu button */}
           <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>
@@ -144,6 +148,7 @@ const AccountLayout = () => {
           </div>
         </main>
       </div>
+       <Footer />
     </div>
   );
 };

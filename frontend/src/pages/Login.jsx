@@ -18,7 +18,7 @@ export default function Login() {
 
   // Prefill + redirect target
   const search = new URLSearchParams(location.search);
-  const next = search.get("next") || "/";
+  const next = search.get("next") || "/account";
   const prefill = search.get("prefill") || location.state?.identifier || "";
 
   const [identifier, setIdentifier] = useState(prefill);

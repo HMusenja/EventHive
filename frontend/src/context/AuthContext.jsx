@@ -1,119 +1,142 @@
-// src/context/AuthContext.jsx
-import { createContext, useContext, useEffect, useMemo, useReducer, useCallback } from "react";
-import { getMe, login as apiLogin, logout as apiLogout, register as apiRegister } from "@/api/authApi";
+import { createContext, useContext, useEffect, useReducer } from "react";
+import { authReducer } from "../reducers/authReducer";
 import {
-  authReducer,
-  initialAuthState,
-  AUTH_INIT,
-  AUTH_SUCCESS,
-  AUTH_ERROR,
-  AUTH_LOGOUT,
-  AUTH_READY,
-} from "../reducers/authReducer";
+  getCurrentUser,
+  logoutUser,
+  loginUser,
+  registerUser,
+} from "../api/authApi";
 
-const AuthContext = createContext(null);
+const AuthContext = createContext();
 
-export function AuthProvider({ children }) {
-  const [state, dispatch] = useReducer(authReducer, initialAuthState);
+const initialState = {
+  user: null,
+  isAuthenticated: false,
+  loading: true,
+  loaded: false,
+  error: null,
+};
 
-  // ---- Fetch current session on mount
+export const AuthProvider = ({ children }) => {
+  const [state, dispatch] = useReducer(authReducer, initialState);
+
+  // Fetch user on first load
+const fetchUser = async () => {
+  try {
+    dispatch({ type: "AUTH_LOADING" });
+    const res = await getCurrentUser();
+    dispatch({ type: "AUTH_SUCCESS", payload: res.data.user });
+    return { ok: true, user: res.data.user };
+  } catch (error) {
+    if (error.response?.status === 401) {
+      console.log("[AuthContext] Not authenticated (401)");
+    } else {
+      console.warn("[AuthContext] Error fetching user:", error.message);
+    }
+    dispatch({ type: "AUTH_LOGOUT" });
+    return { ok: false, message: error.message };
+  }
+};
+
   useEffect(() => {
-    let mounted = true;
-    (async () => {
-      dispatch({ type: AUTH_INIT });
-      try {
-        const data = await getMe(); // { user }
-        if (!mounted) return;
-        dispatch({ type: AUTH_SUCCESS, payload: data?.user, initialized: true });
-      } catch (err) {
-        if (!mounted) return;
-        // 401/403 means not logged in; still mark initialized
-        dispatch({ type: AUTH_READY });
-      }
-    })();
-    return () => { mounted = false; };
-  }, []);
+  fetchUser();
+}, []);
 
-  // ---- Public actions
-  const refreshMe = useCallback(async () => {
-    dispatch({ type: AUTH_INIT });
+  const login = async ({ identifier, password }) => {
+  try {
+    dispatch({ type: "AUTH_LOADING" });
+    console.log("[AuthContext] Logging in...");
+    const res = await loginUser({ identifier, password }); // matches backend
+    console.log("[AuthContext] Login successful:", res.data.user);
+    dispatch({ type: "AUTH_SUCCESS", payload: res.data.user });
+    return { ok: true, user: res.data.user };
+  } catch (error) {
+    console.error(
+      "[AuthContext] Login failed:",
+      error.response?.data?.message || error.message
+    );
+    dispatch({
+      type: "AUTH_ERROR",
+      payload: error.response?.data?.message || "Login failed",
+    });
+    throw error;
+  }
+};
+
+  const register = async (userData) => {
     try {
-      const data = await getMe();
-      dispatch({ type: AUTH_SUCCESS, payload: data?.user });
-      return data?.user || null;
-    } catch (err) {
-      dispatch({ type: AUTH_ERROR, error: err });
-      return null;
-    } finally {
-      dispatch({ type: AUTH_READY });
+      dispatch({ type: "AUTH_LOADING" });
+      console.log("[AuthContext] Registering user...");
+      const res = await registerUser(userData);
+      console.log("[AuthContext] Registration successful:", res.data.user);
+      dispatch({ type: "AUTH_SUCCESS", payload: res.data.user });
+    } catch (error) {
+      console.error(
+        "[AuthContext] Registration failed:",
+        error.response?.data?.message || error.message
+      );
+      dispatch({
+        type: "AUTH_ERROR",
+        payload: error.response?.data?.message || "Registration failed",
+      });
+      throw error;
     }
-  }, []);
-
-  const login = useCallback(async ({ identifier, password }) => {
-    dispatch({ type: AUTH_INIT });
+  };
+  const registerLite = async (userData) => {
     try {
-      const data = await apiLogin({ identifier, password }); // { message, user }
-      // You can trust BE user or call refreshMe(); we accept BE user here:
-      dispatch({ type: AUTH_SUCCESS, payload: data?.user });
-      return { ok: true, user: data?.user, message: data?.message };
-    } catch (err) {
-      dispatch({ type: AUTH_ERROR, error: err });
-      return { ok: false, error: err };
-    } finally {
-      dispatch({ type: AUTH_READY });
+      // do NOT dispatch AUTH_SUCCESS here
+      const res = await registerUser(userData);
+      return res.data; // { user, message, ... } as your API returns
+    } catch (error) {
+      throw error;
     }
-  }, []);
+  };
 
-  const register = useCallback(async ({ fullName, email, username, password }) => {
-    // NOTE: No auto-login after register (per preference)
-    dispatch({ type: AUTH_INIT });
+  const logout = async () => {
     try {
-      const data = await apiRegister({ fullName, email, username, password }); // { message, user }
-      // Keep state as-is; UI can switch to login mode and prefill identifier
-      dispatch({ type: AUTH_READY });
-      return { ok: true, data };
+      console.log("[AuthContext] Logging out...");
+      await logoutUser();
+      dispatch({ type: "AUTH_LOGOUT" });
+      console.log("[AuthContext] Logged out.");
     } catch (err) {
-      dispatch({ type: AUTH_ERROR, error: err });
-      return { ok: false, error: err };
+      console.error("[AuthContext] Logout failed:", err.message);
     }
-  }, []);
+  };
 
-  const logout = useCallback(async () => {
-    dispatch({ type: AUTH_INIT });
-    try {
-      await apiLogout();
-      dispatch({ type: AUTH_LOGOUT });
-      return { ok: true };
-    } catch (err) {
-      dispatch({ type: AUTH_ERROR, error: err });
-      return { ok: false, error: err };
-    } finally {
-      dispatch({ type: AUTH_READY });
-    }
-  }, []);
-
-  const value = useMemo(
-    () => ({
-      state,
-      // state shortcuts
-      user: state.user,
-      loading: state.loading,
-      error: state.error,
-      initialized: state.initialized,
-      // actions
-      login,
-      register,
-      logout,
-      refreshMe,
-    }),
-    [state, login, register, logout, refreshMe]
+  return (
+    <AuthContext.Provider
+      value={{
+        ...state,
+        authDispatch: dispatch,
+        logout,
+        login,
+        register,
+        registerLite,
+        fetchUser,
+        refreshMe: fetchUser,
+       
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
   );
+};
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
-
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used within an AuthProvider");
-  return ctx;
-}
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    console.warn("[useAuth] Tried to use AuthContext outside its provider.");
+    return {
+      user: null,
+      isAuthenticated: false,
+      loading: true,
+      loaded: false,
+      error: null,
+      authDispatch: () => {},
+      logout: () => {},
+      login: () => {},
+      register: () => {},
+    };
+  }
+  return context;
+};

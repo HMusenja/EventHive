@@ -1,21 +1,24 @@
 import Ticket from "../models/Ticket.js";
 
 export const listTicketsForEvent = async (req, res, next) => {
-    try {
-        const { eventId } = req.params;
-        const now = new Date();
+  try {
+    const eventId = req.params.eventId || req.query.eventId; // 👈 support both
+    if (!eventId) {
+      return res.status(400).json({ message: "eventId is required" });
+    }
 
-        const tickets = await Ticket.find({
-            eventId,
-            isActive: true,
-            $and: [
-                { $or: [{ salesStartAt: { $exists: false } }, { salesStartAt: { $lte: now } }] },
-                { $or: [{ salesEndAt: { $exists: false } }, { salesEndAt: { $gte: now } }] },
-            ],
-        }).lean();
+    const now = new Date();
+    const tickets = await Ticket.find({
+      eventId,
+      isActive: true,
+      $and: [
+        { $or: [{ salesStartAt: { $exists: false } }, { salesStartAt: { $lte: now } }] },
+        { $or: [{ salesEndAt:   { $exists: false } }, { salesEndAt:   { $gte: now } }] },
+      ],
+    }).lean();
 
-        res.json({ tickets });
-    } catch (e) { next(e); }
+    res.json({ tickets });
+  } catch (e) { next(e); }
 };
 
 // Optional now; handy for organizer dashboard:

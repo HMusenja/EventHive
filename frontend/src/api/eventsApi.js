@@ -1,9 +1,11 @@
 import axios from "axios";
-const BASE = import.meta.env.VITE_API_BASE || "http://localhost:5050/api";
+
+const BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+
 
 export async function getEvent(idOrSlug) {
   try {
-    const url = `${BASE}/events/${idOrSlug}`;
+    const url = `${BASE}/api/events/${idOrSlug}`;
     console.log("[getEvent] URL →", url);
     const { data } = await axios.get(url);
     console.log("[getEvent] data →", data);
@@ -17,7 +19,7 @@ export async function getEvent(idOrSlug) {
 
 export async function getAllEvents() {
   try {
-    const { data } = await axios.get(`${BASE}/events`);
+    const { data } = await axios.get(`${BASE}/api/events`);
     return data;
   } catch (e) {
     const msg = e?.response?.data?.message || e.message || "Failed to fetch events";

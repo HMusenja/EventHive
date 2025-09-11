@@ -1,0 +1,144 @@
+@baseUrl = http://localhost:5000/api
+@eventId = 68bc3acd967afbc1b243b2e6
+# If using Bearer tokens, paste the JWT here:
+@authToken = REPLACE_WITH_JWT
+# For a second test user:
+@authToken2 = REPLACE_WITH_JWT_2
+
+### ────────────────────────────────────────────────────────────────────────────
+### Health (if you have one)
+GET {{baseUrl}}/health
+
+### ────────────────────────────────────────────────────────────────────────────
+### Auth: Register user #1
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "fullName": "Test One",
+  "username": "test_one",
+  "email": "test1@example.com",
+  "password": "12345678"
+}
+
+### Auth: Login user #1 (capture cookie/JWT as your app returns)
+# If your login returns a token, copy it into {{authToken}} above
+POST {{baseUrl}}/users/login
+Content-Type: application/json
+
+{
+  "email": "test1@mail.com",
+  "password": "1234"
+}
+
+### Optional: set initial global interests for user #1
+PATCH {{baseUrl}}/users/me/interests
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "interests": ["AI", "DevOps", "Design Systems", "Product"]
+}
+
+### ────────────────────────────────────────────────────────────────────────────
+
+### Get Event by slug (sanity)
+GET {{baseUrl}}/events/eventhive-2026
+
+
+### Apply to event (creates EventMember) — user #1
+POST {{baseUrl}}/events/{{eventId}}/apply
+Authorization: Bearer {{authToken}}
+
+### Get my membership for this event — user #1
+GET {{baseUrl}}/events/{{eventId}}/me
+Authorization: Bearer {{authToken}}
+
+### Update my per-event attendee profile — user #1
+PUT {{baseUrl}}/events/{{eventId}}/attendee/profile
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "bio": "Product-minded engineer. Building AI tooling.",
+  "avatarOverride": "https://picsum.photos/seed/u1/200",
+  "interests": ["ai", "product", "design systems", "devops"]
+}
+
+### ────────────────────────────────────────────────────────────────────────────
+### Auth: Register user #2
+POST {{baseUrl}}/users/register
+Content-Type: application/json
+
+{
+  "fullName": "Test Two",
+  "username": "test_two",
+  "email": "test2@mail.com",
+  "password": "1234"
+}
+
+### Auth: Login user #2 (paste token into {{authToken2}})
+POST {{baseUrl}}/users/login
+Content-Type: application/json
+
+{
+  "email": "test2@mail.com",
+  "password": "1234"
+}
+
+### Optional: set initial global interests for user #2
+PATCH {{baseUrl}}/users/me/interests
+Authorization: Bearer {{authToken2}}
+Content-Type: application/json
+
+{
+  "interests": ["ai", "cloud", "security", "frontend"]
+}
+
+### Apply to event — user #2
+POST {{baseUrl}}/events/{{eventId}}/apply
+Authorization: Bearer {{authToken2}}
+
+### Update per-event attendee profile — user #2
+PUT {{baseUrl}}/events/{{eventId}}/attendee/profile
+Authorization: Bearer {{authToken2}}
+Content-Type: application/json
+
+{
+  "bio": "Security-focused frontend dev.",
+  "avatarOverride": "https://picsum.photos/seed/u2/200",
+  "interests": ["ai", "security", "frontend", "cloud"]
+}
+
+### ────────────────────────────────────────────────────────────────────────────
+### Tags suggestion (autocomplete) — popularity first
+GET {{baseUrl}}/tags/suggest?eventId={{eventId}}&q=ai
+
+### Organizer/attendee list (browse) with filters (from Step-2 list endpoint)
+# If you restricted this to organizers, use an organizer token
+GET {{baseUrl}}/events/{{eventId}}/attendees?status=approved&role=attendee&q=test&page=1&limit=10&sort=-createdAt
+Authorization: Bearer {{authToken}}
+
+### ────────────────────────────────────────────────────────────────────────────
+### Matchmaking suggestions (Step-3 Jaccard) — user #1
+# NOTE: Requires both users to be "approved" attendees.
+# If your apply endpoint defaults to "pending", temporarily set them to "approved" in DB
+# or add an admin approve route before running this.
+GET {{baseUrl}}/events/{{eventId}}/match/suggestions?limit=20
+Authorization: Bearer {{authToken}}
+
+### Matchmaking suggestions — user #2
+GET {{baseUrl}}/events/{{eventId}}/match/suggestions?limit=20
+Authorization: Bearer {{authToken2}}
+
+### Search attendees (Step-3 browse)
+# query + tags (ANY by default). Use &match=all for ALL tags.
+GET {{baseUrl}}/events/{{eventId}}/attendees?query=security&tags=ai,frontend&page=1&limit=20&sort=-updatedAt
+Authorization: Bearer {{authToken2}}
+
+### ────────────────────────────────────────────────────────────────────────────
+### Alternative auth style using cookies (if your backend sets HttpOnly cookies)
+# Just omit the Authorization header and let Cookie header carry the session.
+# Example (uncomment & replace your cookie):
+# GET {{baseUrl}}/events/{{eventId}}/me
+# Cookie: connect.sid=REPLACE_ME; Path=/; HttpOnly; Secure

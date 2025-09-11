@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Shield, Bell, User, Eye, EyeOff, Smartphone, Mail, Globe, Lock } from "lucide-react";
+import { Shield, Bell, User, Eye, EyeOff, Smartphone, Mail, Globe, Lock,Badge } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";

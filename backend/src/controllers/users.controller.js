@@ -1,51 +1,42 @@
+// controllers/authController.js
 import User from "../models/User.js";
-import createError from "http-errors"
+import createError from "http-errors";
 import { generateToken } from "../utils/jwt.js";
 
-
-
-// .................... Register User ...........................................
+// ---------------- Register ----------------
 export const registerUser = async (req, res, next) => {
   try {
     let { fullName, email, username, password } = req.body;
 
     if (!fullName || !email || !username || !password) {
-      return next(createError(400, "All fields are required."));
+      return next(createError(400, "All fields are required.", { code: "AUTH_MISSING_FIELDS" }));
     }
 
-    // Normalize email & username
-    email = email.toLowerCase().trim();
-    username = username.toLowerCase().trim();
+    email = String(email).toLowerCase().trim();
+    username = String(username).toLowerCase().trim();
 
-    // Check if user exists by email OR username
-    const existingUser = await User.findOne({
-      $or: [{ email }, { username }],
-    });
+    const existingUser = await User.findOne({ $or: [{ email }, { username }] });
     if (existingUser) {
       return next(
         createError(
           400,
-          existingUser.email === email
-            ? "Email already in use."
-            : "Username already in use."
+          existingUser.email === email ? "Email already in use." : "Username already in use.",
+          { code: existingUser.email === email ? "EMAIL_EXISTS" : "USERNAME_EXISTS" }
         )
       );
     }
 
-    // Create new user
     const user = new User({ fullName, email, username, password });
     await user.save();
 
-    // Generate JWT token
     const token = generateToken({ userId: user._id });
 
-    // Set cookie
     const isProd = process.env.NODE_ENV === "production";
     res.cookie("token", token, {
       httpOnly: true,
       sameSite: "strict",
       secure: isProd,
-      maxAge: 24 * 60 * 60 * 1000, // 1 day
+      maxAge: 24 * 60 * 60 * 1000,
     });
 
     res.status(201).json({
@@ -64,58 +55,76 @@ export const registerUser = async (req, res, next) => {
   }
 };
 
-// .................... Login User ...........................................
+// ---------------- Login ----------------
 export const loginUser = async (req, res, next) => {
   try {
-    const { identifier, email, username, password } = req.body;
+    const { identifier, email, username, password } = req.body || {};
 
     if (!password || !(identifier || email || username)) {
-      return next(createError(400, "Email/username and password are required."));
+      return next(createError(400, "Email/username and password are required.", { code: "AUTH_MISSING_FIELDS" }));
     }
 
-    // pick whichever is provided
-    const id = (identifier || email || username).toLowerCase().trim();
+    const id = String(identifier || email || username).toLowerCase().trim();
 
-    // Look up by email OR username
-    const user = await User.findOne({
-      $or: [{ email: id }, { username: id }],
-    });
+    // IMPORTANT: select password for compare, and fields we branch on
+    const user = await User.findOne({ $or: [{ email: id }, { username: id }] })
+      .select("+password role accountStatus isGuest")
+      .lean(false);
 
     if (!user) {
-      return next(createError(400, "Invalid email/username or password."));
+      return next(createError(400, "Invalid email/username or password.", { code: "AUTH_INVALID_CREDENTIALS" }));
     }
 
-    // Compare password
-    const isMatch = await user.comparePassword(password);
-    if (!isMatch) {
-      return next(createError(400, "Invalid email/username or password."));
+    // Block deleted / suspended accounts explicitly
+    if (user.accountStatus === "deleted") {
+      return next(createError(403, "Account deleted.", { code: "ACCOUNT_DELETED" }));
+    }
+    if (user.accountStatus === "suspended") {
+      return next(createError(403, "Account suspended.", { code: "ACCOUNT_SUSPENDED" }));
     }
 
-    // Generate JWT token
+    // If this email was created via guest checkout, they may not have a password yet
+    if (user.isGuest === true || !user.password) {
+      return next(
+        createError(
+          400,
+          "This email is a guest account. Please set a password to continue.",
+          { code: "GUEST_NO_PASSWORD" }
+        )
+      );
+    }
+
+    const ok = await user.comparePassword(password);
+    if (!ok) {
+      return next(createError(400, "Invalid email/username or password.", { code: "AUTH_INVALID_CREDENTIALS" }));
+    }
+
     const token = generateToken({ userId: user._id });
 
-    // Set cookie
     const isProd = process.env.NODE_ENV === "production";
     res.cookie("token", token, {
       httpOnly: true,
       sameSite: "strict",
       secure: isProd,
-      maxAge: 24 * 60 * 60 * 1000, // 1 day
+      maxAge: 24 * 60 * 60 * 1000,
     });
 
-    // Update last active
-    user.lastActive = new Date();
+    // Track login activity (your schema uses lastLoginAt)
+    user.lastLoginAt = new Date();
     await user.save();
 
-    // Respond with safe data
+    const safe = user.toObject();
+    delete safe.password;
+
     res.status(200).json({
       message: "Login successful.",
       user: {
-        _id: user._id,
-        fullName: user.fullName,
-        email: user.email,
-        username: user.username,
-        createdAt: user.createdAt,
+        _id: safe._id,
+        fullName: safe.fullName,
+        email: safe.email,
+        username: safe.username,
+        createdAt: safe.createdAt,
+        role: safe.role,
       },
     });
   } catch (error) {
@@ -124,17 +133,15 @@ export const loginUser = async (req, res, next) => {
   }
 };
 
-// .......... Get current user profile.......................................
+// ---------------- Get Me ----------------
 export const getMe = async (req, res, next) => {
   try {
-    const user = req.user; 
+    const user = req.user;
     res.status(200).json({ user });
-  } catch (error) {
-    next(error);
-  }
+  } catch (error) { next(error); }
 };
 
-//................... Logout user.......................
+// ---------------- Logout ----------------
 export const logoutUser = (req, res) => {
   res.clearCookie("token");
   res.status(200).json({ message: "Logout successful" });

@@ -1,0 +1,177 @@
+@base = http://localhost:5000
+@eventSlug = fusion-2025
+@timezone = Europe/Berlin
+
+###
+# 0) (Optional) Health
+GET {{base}}/api/health
+
+###
+# 1) Admin login (to create event and grant memberships)
+# Adjust to your auth
+POST {{base}}/api/users/login
+Content-Type: application/json
+
+{
+  "email": "test5@mail.com",
+  "password": "1234"
+}
+
+# 👉 Copy the Set-Cookie value from the response headers into @adminCookie below.
+
+###
+# 1a) Set admin cookie here (name=value only)
+@adminCookie = token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2OGI3NDFlMjY3ODI5ZWY5ZmYwOGU0ODAiLCJpYXQiOjE3NTczNzYwMzYsImV4cCI6MTc1Nzk4MDgzNn0.d4ZpAfNK86STyy5LF-4Mm9-mo8JSayq0id8Tl2RBBBs; Max-Age=86400; Path=/; Expires=Wed, 10 Sep 2025 00:00:36 GMT; HttpOnly; SameSite=Strict
+
+###
+# 2) Create an event (admin)
+POST {{base}}/api/events
+Cookie: {{adminCookie}}
+Content-Type: application/json
+
+{
+  "title": "Fusion 2025",
+  "slug": "{{eventSlug}}",
+  "subtitle": "Build, ship, connect",
+  "startAt": "2025-11-03T09:00:00.000Z",
+  "endAt": "2025-11-03T18:00:00.000Z",
+  "timezone": "{{timezone}}",
+  "venue": { "name": "City Conference Center", "city": "Berlin", "country": "DE" },
+  "coverImage": ""
+}
+
+###
+# 2a) Read event by slug to get _id
+GET {{base}}/api/events/{{eventSlug}}
+
+# 👉 Copy the _id from the JSON, and paste below:
+@eventId = 68bf6e5b1b3974cb9d2de415
+
+###
+# 3) Create 3 regular users (register) — adjust if you already have users
+POST {{base}}/api/users/register
+Content-Type: application/json
+
+{ "fullName":"Ada Love", "email":"test6@mail.com", "password":"1234","username":"test_6" }
+
+###
+POST {{base}}/api/users/register
+Content-Type: application/json
+
+{ "fullName":"Grace Hopp", "email":"test4@mail.com", "password":"1234","username":"test_4" }
+
+###
+POST {{base}}/api/users/register
+Content-Type: application/json
+
+{ "fullName":"Linus Torv", "email":"test5@mail.com", "password":"1234","username":"test_5" }
+
+###
+# 4) Admin grants tickets/memberships (approved attendee role) to each user
+# If you already have a checkout/onboarding flow, you can skip this and use that instead.
+POST {{base}}/api/events/68bf6e5b1b3974cb9d2de415/members
+Cookie: {{adminCookie}}
+Content-Type: application/json
+
+{ "email": "test6@mail.com", "roles": ["attendee"], "status":"approved" }
+
+###
+POST {{base}}/api/events/{{eventId}}/members
+Cookie: {{adminCookie}}
+Content-Type: application/json
+
+{ "email": "test4@mail.com", "roles": ["attendee"], "status":"approved" }
+
+###
+POST {{base}}/api/events/{{eventId}}/members
+Cookie: {{adminCookie}}
+Content-Type: application/json
+
+{ "email": "test5@mail.com", "roles": ["attendee"], "status":"approved" }
+
+###
+# 5) Log in as each attendee and set event-specific profile (bio + interests)
+#    (We’ll also use these sessions for personalized suggestions.)
+
+# --- ADA ---
+POST {{base}}/api/users/login
+Content-Type: application/json
+
+{ "email":"test6@mail.com", "password":"1234"}
+
+# copy Set-Cookie → paste into @adaCookie below
+@adaCookie = sid=REPLACE_ADA
+
+###
+PUT {{base}}/api/events/{{eventId}}/attendee/profile
+Cookie: {{adaCookie}}
+Content-Type: application/json
+
+{
+  "bio": "Building tools for devs. I love AI, ML, and compilers.",
+  "interests": ["ai", "ml", "compilers", "react"]
+}
+
+###
+# --- GRACE ---
+POST {{base}}/api/auth/login
+Content-Type: application/json
+
+{ "email":"grace@mail.com", "password":"p@ssw0rd" }
+
+# copy Set-Cookie → paste:
+@graceCookie = sid=REPLACE_GRACE
+
+###
+PUT {{base}}/api/events/{{eventId}}/attendee/profile
+Cookie: {{graceCookie}}
+Content-Type: application/json
+
+{
+  "bio": "COBOL pioneer. Payments, banking, and reliable systems.",
+  "interests": ["fintech", "payments", "banking", "compilers"]
+}
+
+###
+# --- LINUS ---
+POST {{base}}/api/auth/login
+Content-Type: application/json
+
+{ "email":"linus@mail.com", "password":"p@ssw0rd" }
+
+# copy Set-Cookie → paste:
+@linusCookie = sid=REPLACE_LINUS
+
+###
+PUT {{base}}/api/events/{{eventId}}/attendee/profile
+Cookie: {{linusCookie}}
+Content-Type: application/json
+
+{
+  "bio": "Kernel and tooling. OSS maintainer.",
+  "interests": ["linux", "kernels", "git", "tooling"]
+}
+
+###
+# 6) Verify counts
+GET {{base}}/api/events/{{eventId}}/attendees/count
+
+###
+# 7) Personalized suggestions
+#    View as ADA (expects GRACE to rank higher due to 'compilers' + 'react' overlap)
+GET {{base}}/api/events/{{eventId}}/match/suggestions?limit=20
+Cookie: {{adaCookie}}
+
+###
+#    View as GRACE (expects ADA to rank near top due to 'compilers' overlap)
+GET {{base}}/api/events/{{eventId}}/match/suggestions?limit=20
+Cookie: {{graceCookie}}
+
+###
+#    View as LINUS (likely no overlap with ADA/GRACE; may return empty or lower-ranked)
+GET {{base}}/api/events/{{eventId}}/match/suggestions?limit=20
+Cookie: {{linusCookie}}
+
+###
+# 8) Unauthenticated suggestions (not personalized; still ok if your endpoint allows)
+GET {{base}}/api/events/{{eventId}}/match/suggestions?limit=20
