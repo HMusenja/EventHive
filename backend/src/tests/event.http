@@ -1,6 +1,6 @@
 
 ### ENV
-@baseUrl = http://localhost:5000
+@baseUrl = http://localhost:5050
 @frontend = http://localhost:5173
 
 
@@ -184,7 +184,7 @@ POST {{baseUrl}}/api/orders/{{orderId}}/fulfill
 Authorization: {{authA}}
 
 ### (REAL) Stripe webhook endpoint (use Stripe CLI to send events)
-# stripe listen --forward-to localhost:5000/api/ticketing/webhook/stripe
+# stripe listen --forward-to localhost:5050/api/ticketing/webhook/stripe
 POST {{baseUrl}}/api/ticketing/webhook/stripe
 Content-Type: application/json
 

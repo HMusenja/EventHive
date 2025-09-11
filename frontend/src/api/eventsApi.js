@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+const BASE = import.meta.env.VITE_API_BASE || "http://localhost:5050";
 
 
 export async function getEvent(idOrSlug) {

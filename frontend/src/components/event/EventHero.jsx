@@ -2,9 +2,8 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import SmartGetTicketButton from "./SmartGetTicketButton";
-import { Link } from "react-router-dom";
 
-export default function EventHero({ event, membership, profileUrl, attendeeCount,  memberCount, checkedInCount }) {
+export default function EventHero({ event, membership, profileUrl, attendeeCount, memberCount, checkedInCount }) {
   const start = new Date(event.startAt);
   const end = new Date(event.endAt);
 
@@ -43,7 +42,7 @@ export default function EventHero({ event, membership, profileUrl, attendeeCount
         {/* Counts */}
         {(typeof attendeeCount === "number" || typeof checkedInCount === "number") && (
           <div className="mt-2 flex items-center gap-3 text-sm">
-              {typeof memberCount === "number" && (
+            {typeof memberCount === "number" && (
               <span className="text-muted-foreground">
                 {pluralize(memberCount, "member")}
               </span>

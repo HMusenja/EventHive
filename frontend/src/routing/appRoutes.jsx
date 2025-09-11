@@ -4,13 +4,8 @@ import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import EventDetail from "@/pages/EventDetail";
 import EventList from "@/pages/EventList";
-
-
 import RequestMeeting from "@/pages/RequestMeeting";
 import MyMeetings from "@/pages/MyMeetings";
-
-
-
 import AccountLayout from "@/pages/AccountLayout";
 import Profile from "@/pages/account/Profile";
 import Matches from "@/pages/account/Matches";
@@ -38,13 +33,9 @@ export default function AppRoutes() {
 
         {/* Events listing */}
         <Route path="/events" element={<EventList />} />
-
-        
-        <Route path="/events/:id/tickets" element={<Tickets />} />
         <Route path="/tickets" element={<Tickets />} />
         <Route path="/events/:eventId/network/request/:userId" element={<RequestMeeting />} />
         <Route path="/events/:eventId/meetings" element={<MyMeetings />} />
-
 
         {/* Protected */}
         {/* <Route
@@ -55,17 +46,13 @@ export default function AppRoutes() {
           </ProtectedRoute>
         }
       />
-    
-
-
         {/* Event detail by slug (preferred) */}
         <Route path="/events/:slug" element={<EventDetail />} />
 
         {/* Onboarding + Tickets by slug */}
         <Route path="/events/:slug/onboarding" element={<EventOnboardingPage />} />
         <Route path="/events/:slug/tickets" element={<Tickets />} />
-          {/*<Route path="/events/id/:id/tickets" element={<Tickets />} /> */}
-    
+        <Route path="/events/id/:id/tickets" element={<Tickets />} />
         <Route path="/pay/dummy-checkout" element={<DummyCheckout />} />
         <Route path="/events/:eventId/checkin" element={<CheckinScanner />} />
 
@@ -73,7 +60,6 @@ export default function AppRoutes() {
         <Route path="/events/:slug/me" element={<EventProfilePage />} />
         <Route path="/events/:slug/people" element={<PeopleSuggestionsPage />} />
         <Route path="/events/:slug/attendees/:memberId" element={<PeoplePublicProfile />} />
-
         {/* Legacy event detail by id */}
         <Route path="/events/id/:id" element={<EventDetail />} />
       </Route>
@@ -87,7 +73,6 @@ export default function AppRoutes() {
         <Route path="my-tickets" element={<MyTickets />} />
         <Route path="settings" element={<Settings />} />
       </Route>
-
 
       {/* 404 fallback (optional) */}
       {/* <Route path="*" element={<NotFound />} /> */}

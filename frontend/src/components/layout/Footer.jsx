@@ -1,6 +1,6 @@
 export default function Footer() {
   return (
-    <footer className="bg-foreground py-12 text-background">
+    <footer className="bg-black py-12 text-white">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="mb-8 grid grid-cols-1 gap-8 md:grid-cols-4">
           <div>
@@ -8,32 +8,30 @@ export default function Footer() {
               <div className="h-8 w-8 rounded-lg bg-gradient-vibrant shadow-vibrant" />
               <span className="text-xl font-bold">EventHive</span>
             </div>
-            <p className="mb-4 text-background/70">Create and manage unforgettable events.</p>
+            <p className="mb-4 text-white/70">Create and manage unforgettable events.</p>
           </div>
 
           <div>
             <h4 className="mb-4 font-semibold">Product</h4>
-            <ul className="space-y-2 text-background/70">
+            <ul className="space-y-2 text-white/70">
               <li><a href="#">Features</a></li>
-              <li><a href="#">Pricing</a></li>
               <li><a href="#">Templates</a></li>
               <li><a href="#">Integrations</a></li>
             </ul>
           </div>
 
           <div>
-            <h4 className="mb-4 font-semibold">Company</h4>
-            <ul className="space-y-2 text-background/70">
+            <h4 className="mb-4 font-semibold">EventHive</h4>
+            <ul className="space-y-2 text-white/70">
               <li><a href="#">About</a></li>
               <li><a href="#">Blog</a></li>
-              <li><a href="#">Careers</a></li>
               <li><a href="#">Contact</a></li>
             </ul>
           </div>
 
           <div>
             <h4 className="mb-4 font-semibold">Connect</h4>
-            <ul className="space-y-2 text-background/70">
+            <ul className="space-y-2 text-white/70">
               <li><a href="#">Twitter</a></li>
               <li><a href="#">LinkedIn</a></li>
               <li><a href="#">Facebook</a></li>
@@ -42,9 +40,9 @@ export default function Footer() {
           </div>
         </div>
 
-        <div className="flex flex-col items-center justify-between gap-4 border-t border-background/20 pt-6 sm:flex-row">
-          <p className="text-sm text-background/70">© 2025 EventHive. All rights reserved.</p>
-          <div className="flex gap-6 text-sm text-background/70">
+        <div className="flex flex-col items-center justify-between gap-4 border-t border-white/20 pt-6 sm:flex-row">
+          <p className="text-sm text-white/70">© 2025 EventHive. All rights reserved.</p>
+          <div className="flex gap-6 text-sm text-white/70">
             <a href="#">Privacy</a>
             <a href="#">Terms</a>
             <a href="#">Cookies</a>

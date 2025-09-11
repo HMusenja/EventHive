@@ -16,7 +16,7 @@ import eventRoutes from "./routes/events.routes.js";
 import userRoutes from "./routes/users.routes.js";
 import ticketRoutes from "./routes/tickets.routes.js";
 import ticketingRoutes from "./routes/ticketingRoutes.js";
-import  orderRoutes from "./routes/orderRoutes.js";
+import orderRoutes from "./routes/orderRoutes.js";
 import checkinRoutes from "./routes/checkinRoutes.js";
 import attendeeRoutes from "./routes/attendee.routes.js";
 import eventMemberRoutes from "./routes/eventMember.routes.js";
@@ -32,7 +32,7 @@ dotenv.config();
 await connectDB();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5050 || 5050;
 
 // ----------------- Middleware -----------------
 app.use(
@@ -51,8 +51,8 @@ app.use(cookieParser());
 app.use("/api/events", eventRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/tickets", ticketRoutes);
-app.use("/api/ticketing", ticketingRoutes); 
-app.use("/api/orders", orderRoutes);        
+app.use("/api/ticketing", ticketingRoutes);
+app.use("/api/orders", orderRoutes);
 app.use("/api", checkinRoutes);
 app.use("/api/attendees", attendeeRoutes);
 app.use("/api", eventMemberRoutes);
