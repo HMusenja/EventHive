@@ -1,29 +1,19 @@
 import axios from "axios";
 
-const BASE = import.meta.env.VITE_API_BASE || "http://localhost:5050";
-
+const BASE = (import.meta.env.VITE_API_BASE || "http://localhost:5050").replace(/\/+$/, "");
+const api = axios.create({
+  baseURL: `${BASE}/api`,
+  withCredentials: true,
+});
 
 export async function getEvent(idOrSlug) {
-  try {
-    const url = `${BASE}/api/events/${idOrSlug}`;
-    console.log("[getEvent] URL →", url);
-    const { data } = await axios.get(url);
-    console.log("[getEvent] data →", data);
-    return data;
-  } catch (e) {
-    const msg = e?.response?.data?.message || e.message || "Request failed";
-    console.error("[getEvent] error →", msg);
-    throw new Error(msg);
-  }
+  // optional debug
+  // console.log("[getEvent] URL →", `${api.defaults.baseURL}/events/${idOrSlug}`);
+  const { data } = await api.get(`events/${idOrSlug}`);
+  return data;
 }
 
 export async function getAllEvents() {
-  try {
-    const { data } = await axios.get(`${BASE}/api/events`);
-    return data;
-  } catch (e) {
-    const msg = e?.response?.data?.message || e.message || "Failed to fetch events";
-    console.error("[getAllEvents] error:", msg);
-    throw new Error(msg);
-  }
+  const { data } = await api.get("events");
+  return data;
 }

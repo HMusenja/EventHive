@@ -1,42 +1,62 @@
-// controllers/eventMemberController.js
 import mongoose from "mongoose";
+import createError from "http-errors";
 import Event from "../models/Event.js";
 import EventMember from "../models/EventMember.js";
 import Attendee from "../models/Attendee.js";
-import createError from "http-errors";
 import User from "../models/User.js";
 
+/** Resolve :eventId that might be an ObjectId or a slug; returns an ObjectId */
+async function resolveEventId(idOrSlug) {
+  if (mongoose.isValidObjectId(idOrSlug)) {
+    const ev = await Event.findById(idOrSlug).select("_id").lean();
+    if (ev) return ev._id;
+  }
+  const bySlug = await Event.findOne({ slug: idOrSlug }).select("_id").lean();
+  if (!bySlug) throw createError(404, "Event not found");
+  return bySlug._id;
+}
+
+/** Build a query that matches either eventId|event and userId|user */
+function memberKeyQuery(eventId, userId) {
+  return {
+    $and: [
+      { $or: [{ eventId }, { event: eventId }] },
+      { $or: [{ userId }, { user: userId }] },
+    ],
+  };
+}
+
+/** POST /api/events/:eventId/apply */
 export const applyToEvent = async (req, res, next) => {
   try {
-    const userId = req.user?._id;
+    const userId = req.user?._id || req.user?.id;
     if (!userId) return next(createError(401, "Not authenticated"));
 
-    const { eventId } = req.params;
-    if (!mongoose.isValidObjectId(eventId)) {
-      return next(createError(400, "Invalid eventId"));
-    }
+    const eventId = await resolveEventId(req.params.eventId);
 
-    // ensure event exists
-    const event = await Event.findById(eventId);
-    if (!event) return next(createError(404, "Event not found"));
-
-    // ensure user has an Attendee profile (or create lightweight one)
-    let attendee = await Attendee.findOne({ userId });
+    // ensure attendee profile exists (support userId OR user)
+    let attendee = await Attendee.findOne({ $or: [{ userId }, { user: userId }] });
     if (!attendee) {
-      attendee = await Attendee.create({ userId, bio: "", avatar: "", interests: [] });
+      attendee = await Attendee.create({
+        userId,
+        user: userId, // keep both fields for schema compatibility
+        bio: "",
+        avatar: "",
+        interests: [],
+      });
     }
 
-    // create-or-confirm membership
-    const existing = await EventMember.findOne({ eventId, userId });
+    // existing membership?
+    const existing = await EventMember.findOne(memberKeyQuery(eventId, userId));
     if (existing) {
-      // optionally: if banned/rejected, block; if pending/approved, just return
       return res.status(200).json({ member: existing, message: "Already applied or a member" });
     }
 
     const member = await EventMember.create({
       eventId,
+      event: eventId, // set both
       userId,
-      // choose your default: "pending" for manual approval, or "approved"
+      user: userId,
       status: "pending",
       roles: ["attendee"],
     });
@@ -47,43 +67,37 @@ export const applyToEvent = async (req, res, next) => {
   }
 };
 
+/** GET /api/events/:eventId/attendees (list with filters) */
 export const getEventAttendees = async (req, res, next) => {
   try {
-    const { eventId } = req.params;
-    if (!mongoose.isValidObjectId(eventId)) return next(createError(400, "Invalid eventId"));
-
-    const event = await Event.findById(eventId).select("_id");
-    if (!event) return next(createError(404, "Event not found"));
+    const eventId = await resolveEventId(req.params.eventId);
 
     const {
-      status,                 // approved | pending | rejected | banned
-      role,                   // attendee | speaker | staff | organizer
+      status,         // approved | pending | rejected | banned
+      role,           // legacy single role
+      roles,          // CSV or array
       q,
       page = 1,
       limit = 20,
       sort = "-createdAt",
-      // NEW:
-      userType               // alias for role filter below, if you prefer
+      userType,       // guest | member (maps to user.isGuest)
     } = req.query;
 
-    // NEW: ?role=guest|member for dashboard filters (without clashing with EventMember.roles)
-    const guestMember = (req.query.role || userType || "").toLowerCase(); // "guest" | "member" | ""
-
-    const pageNum  = Math.max(parseInt(page, 10) || 1, 1);
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1);
     const pageSize = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
 
-    const match = { eventId: new mongoose.Types.ObjectId(eventId) };
-    if (status) match.status = status;
-    if (role && !["guest","member"].includes(role)) match.roles = role; // keep original meaning
+    // role filter (array)
+    let roleFilter = [];
+    if (Array.isArray(roles)) roleFilter = roles;
+    else if (typeof roles === "string") roleFilter = roles.split(",").map(s => s.trim()).filter(Boolean);
+    else if (role) roleFilter = [role];
 
-    const sortStage = {};
-    const dir = sort.startsWith("-") ? -1 : 1;
-    const key = sort.startsWith("-") ? sort.slice(1) : sort;
-    sortStage[key] = dir;
+    const sortDir = sort.startsWith("-") ? -1 : 1;
+    const sortKey = sort.startsWith("-") ? sort.slice(1) : sort;
 
     const searchOr = [];
-    if (q && q.trim()) {
-      const rx = new RegExp(q.trim(), "i");
+    if (q && String(q).trim()) {
+      const rx = new RegExp(String(q).trim(), "i");
       searchOr.push(
         { "user.fullName": rx },
         { "user.username": rx },
@@ -94,36 +108,77 @@ export const getEventAttendees = async (req, res, next) => {
     }
 
     const pipeline = [
-      { $match: match },
+      // match event by either field
+      { $match: { $or: [{ eventId }, { event: eventId }] } },
+
+      // normalize fields: _userId + allRoles
+      {
+        $addFields: {
+          _userId: { $ifNull: ["$userId", "$user"] },
+          allRoles: {
+            $cond: [
+              { $isArray: "$roles" },
+              "$roles",
+              { $cond: [{ $ne: ["$role", null] }, ["$role"], []] }
+            ],
+          },
+        },
+      },
+
+      // apply status/roles filters
+      ...(status ? [{ $match: { status } }] : []),
+      ...(roleFilter.length ? [{ $match: { allRoles: { $in: roleFilter } } }] : []),
+
       // join user
       {
         $lookup: {
           from: "users",
-          localField: "userId",
+          localField: "_userId",
           foreignField: "_id",
           as: "user",
           pipeline: [{ $project: { fullName: 1, username: 1, email: 1, avatar: 1, isGuest: 1 } }],
         },
       },
       { $unwind: "$user" },
+
       // join attendee profile
       {
         $lookup: {
           from: "attendees",
-          localField: "userId",
+          localField: "_userId",
           foreignField: "userId",
-          as: "attendee",
+          as: "attendeeByUserId",
           pipeline: [{ $project: { bio: 1, avatar: 1, interests: 1 } }],
         },
       },
-      { $addFields: { attendee: { $ifNull: [{ $arrayElemAt: ["$attendee", 0] }, null] } } },
+      {
+        $lookup: {
+          from: "attendees",
+          localField: "_userId",
+          foreignField: "user",
+          as: "attendeeByUser",
+          pipeline: [{ $project: { bio: 1, avatar: 1, interests: 1 } }],
+        },
+      },
+      {
+        $addFields: {
+          attendee: {
+            $ifNull: [
+              { $arrayElemAt: ["$attendeeByUserId", 0] },
+              { $arrayElemAt: ["$attendeeByUser", 0] }
+            ],
+          },
+        },
+      },
 
-      // NEW: filter guest/member via user.isGuest
-      ...(guestMember === "guest" ? [{ $match: { "user.isGuest": true } }] : []),
-      ...(guestMember === "member" ? [{ $match: { "user.isGuest": false } }] : []),
+      // filter guest/member via user.isGuest
+      ...(userType === "guest" ? [{ $match: { "user.isGuest": true } }] : []),
+      ...(userType === "member" ? [{ $match: { "user.isGuest": false } }] : []),
 
       ...(searchOr.length ? [{ $match: { $or: searchOr } }] : []),
-      { $sort: sortStage },
+
+      { $sort: { [sortKey]: sortDir } },
+
       {
         $facet: {
           data: [
@@ -133,7 +188,7 @@ export const getEventAttendees = async (req, res, next) => {
               $project: {
                 _id: 1,
                 status: 1,
-                roles: 1,
+                roles: "$allRoles",
                 createdAt: 1,
                 checkedInAt: 1,
                 "user._id": 1,
@@ -175,81 +230,69 @@ export const getEventAttendees = async (req, res, next) => {
     ];
 
     const [result] = await EventMember.aggregate(pipeline);
-    res.json({ attendees: result?.data ?? [], pagination: result?.meta ?? { total: 0, page: pageNum, limit: pageSize, totalPages: 0 } });
+    res.json({
+      attendees: result?.data ?? [],
+      pagination: result?.meta ?? { total: 0, page: pageNum, limit: pageSize, totalPages: 0 },
+    });
   } catch (err) {
     next(err);
   }
 };
 
-function devLog(...args) {
-  if (process.env.NODE_ENV !== "production") {
-    console.warn("[requireOrganizerForEvent]", ...args);
-  }
-}
-
-// Simple guard: adjust to your app (organizer/admin check)
-export async function requireOrganizerForEvent(req, res, next) {
+/** GET /api/events/:eventId/me — return 200 with isMember:false when not found */
+export const getMyEventMember = async (req, res, next) => {
   try {
-    const userId = req.user?._id;
+    const userId = req.user?._id || req.user?.id;
     if (!userId) return next(createError(401, "Not authenticated"));
 
-    const { eventId } = req.params;
+    const eventId = await resolveEventId(req.params.eventId);
 
-    const event = mongoose.isValidObjectId(eventId)
-      ? await Event.findById(eventId).select("_id ownerId organizers owners createdBy").lean()
-      : await Event.findOne({ slug: eventId }).select("_id ownerId organizers owners createdBy").lean();
+    const member = await EventMember.findOne({
+      eventId,
+      userId, // mongoose will cast string → ObjectId
+    }).lean();
+    if (!member) return res.status(200).json({ isMember: false });
 
-    if (!event) return next(createError(404, "Event not found"));
+    const roles = Array.isArray(member.roles)
+      ? member.roles
+      : member.role
+        ? [member.role]
+        : [];
 
-    const uid = String(userId);
-    const isSiteAdmin = !!(req.user?.role === "admin" || req.user?.isAdmin);
-
-    const isOwner =
-      (event.ownerId && String(event.ownerId) === uid) ||
-      (event.createdBy && String(event.createdBy) === uid) ||
-      (Array.isArray(event.owners) && event.owners.some(id => String(id) === uid)) ||
-      (Array.isArray(event.organizers) && event.organizers.some(id => String(id) === uid));
-
-    let isOrganizerMember = false;
-    try {
-      isOrganizerMember = !!await EventMember.exists({
-        eventId: event._id,
-        userId: userId,
-        status: "approved",
-        roles: { $in: ["organizer", "staff"] },
-      });
-    } catch (e) {
-      devLog("exists() error:", e?.message);
-    }
-
-    if (isSiteAdmin || isOwner || isOrganizerMember) return next();
-
-    devLog("Denied", {
-      uid,
-      ownerId: String(event.ownerId || ""),
-      isSiteAdmin,
-      isOwner,
-      isOrganizerMember
+    return res.json({
+      isMember: true,
+      _id: String(member._id),
+      role: Array.isArray(member.roles) ? member.roles : [member.roles].filter(Boolean),
+      status: member.status,
     });
-    return next(createError(403, "Organizer/admin permission required"));
   } catch (err) {
-    return next(err);
+    // Ensure 404s stay 404s, not 500s
+    if (err.status || err.statusCode) return next(err);
+    console.error("GET /events/:eventId/me error:", err);
+    return next(createError(500, "Failed to fetch membership"));
   }
-}
-/**
- * POST /api/events/:eventId/members
- * Body: { email, roles?: string[], status?: "approved"|"pending"|"rejected"|"banned" }
- * Creates or updates an EventMember for the given user email.
- */
+};
+
+/** GET /api/events/:eventId/attendees/count */
+export const getAttendeesCount = async (req, res, next) => {
+  try {
+    const eventId = await resolveEventId(req.params.eventId);
+    const count = await EventMember.countDocuments({
+      $and: [
+        { $or: [{ eventId }, { event: eventId }] },
+        { status: "approved" },
+      ],
+    });
+    res.json({ count });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/** POST /api/events/:eventId/members — organizer upsert by email */
 export const upsertEventMemberByEmail = async (req, res, next) => {
   try {
-    const { eventId } = req.params;
-    if (!mongoose.isValidObjectId(eventId)) {
-      return next(createError(400, "Invalid eventId"));
-    }
-
-    const event = await Event.findById(eventId).select("_id");
-    if (!event) return next(createError(404, "Event not found"));
+    const eventId = await resolveEventId(req.params.eventId);
 
     const { email, roles = ["attendee"], status = "approved" } = req.body || {};
     if (!email) return next(createError(400, "Email is required"));
@@ -260,32 +303,39 @@ export const upsertEventMemberByEmail = async (req, res, next) => {
     if (!user) return next(createError(404, "User not found"));
 
     const member = await EventMember.findOneAndUpdate(
-      { eventId, userId: user._id },
+      memberKeyQuery(eventId, user._id),
       {
-        $setOnInsert: { eventId, userId: user._id, createdAt: new Date() },
+        $setOnInsert: {
+          eventId,
+          event: eventId,
+          userId: user._id,
+          user: user._id,
+          createdAt: new Date(),
+        },
         $set: { roles, status, updatedAt: new Date() },
       },
       { new: true, upsert: true }
     );
 
-    return res.status(200).json({ member, upserted: true });
+    res.json({ member, upserted: true });
   } catch (err) {
     next(err);
   }
 };
 
-/**
- * PATCH /api/events/:eventId/members/:memberId
- * Body: { status?, roles? }
- * Update membership status/roles.
- */
+/** PATCH /api/events/:eventId/members/:memberId — update status/roles */
 export const updateEventMember = async (req, res, next) => {
   try {
-    const { eventId, memberId } = req.params;
-    if (!mongoose.isValidObjectId(eventId)) return next(createError(400, "Invalid eventId"));
+    const eventId = await resolveEventId(req.params.eventId);
+    const { memberId } = req.params;
     if (!mongoose.isValidObjectId(memberId)) return next(createError(400, "Invalid memberId"));
 
-    const member = await EventMember.findOne({ _id: memberId, eventId });
+    const member = await EventMember.findOne({
+      $and: [
+        { _id: memberId },
+        { $or: [{ eventId }, { event: eventId }] },
+      ],
+    });
     if (!member) return next(createError(404, "Member not found"));
 
     const { status, roles } = req.body || {};
@@ -298,3 +348,40 @@ export const updateEventMember = async (req, res, next) => {
     next(err);
   }
 };
+
+/** Guard: organizer/staff/owner/admin */
+export async function requireOrganizerForEvent(req, res, next) {
+  try {
+    const userId = req.user?._id || req.user?.id;
+    if (!userId) return next(createError(401, "Not authenticated"));
+
+    const eventId = await resolveEventId(req.params.eventId);
+    const event = await Event.findById(eventId)
+      .select("_id ownerId organizers owners createdBy")
+      .lean();
+    if (!event) return next(createError(404, "Event not found"));
+
+    const uid = String(userId);
+    const isSiteAdmin = !!(req.user?.role === "admin" || req.user?.isAdmin);
+
+    const isOwner =
+      (event.ownerId && String(event.ownerId) === uid) ||
+      (event.createdBy && String(event.createdBy) === uid) ||
+      (Array.isArray(event.owners) && event.owners.some(id => String(id) === uid)) ||
+      (Array.isArray(event.organizers) && event.organizers.some(id => String(id) === uid));
+
+    const isOrganizerMember = !!(await EventMember.exists({
+      $and: [
+        { $or: [{ eventId: event._id }, { event: event._id }] },
+        { $or: [{ userId }, { user: userId }] },
+        { status: "approved" },
+        { roles: { $in: ["organizer", "staff"] } },
+      ],
+    }));
+
+    if (isSiteAdmin || isOwner || isOrganizerMember) return next();
+    return next(createError(403, "Organizer/admin permission required"));
+  } catch (err) {
+    next(err);
+  }
+}

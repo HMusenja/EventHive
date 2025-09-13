@@ -1,4 +1,3 @@
-// controllers/checkinController.js
 import Order from "../models/Order.js";
 import Attendee from "../models/Attendee.js";
 import User from "../models/User.js";
