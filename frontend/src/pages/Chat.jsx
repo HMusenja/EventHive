@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useLocation } from "react-router-dom";
 import socket, { connectSocket } from "@/lib/socket";
 import api from "@/lib/axios";
 import { useAuth } from "@/context/AuthContext";
@@ -38,7 +38,7 @@ const isSameDay = (a, b) => {
     );
 };
 
-/* A tiny, dependency-free emoji palette */
+/* Tiny emoji palette */
 const COMMON_EMOJIS =
     "😀 😁 😂 🤣 😊 🙂 🙃 😉 😍 😘 🤗 🤩 🤔 😏 😴 😮 😱 😅 😆 😇 🤤 😋 😎 🥳 🤠 😤 😡 😭 😢 🤯 🤬 🙏 🤝 👍 👎 👏 ✨ 🎉 💯 🔥 💡 🧠 🫶 ❤️ 🩷 🧡 💛 💚 💙 💜 🤍 🤎 🖤 ☕ 🍀 🌟 🌈 🌊 🌞 🌙 💫 📎 📌 📨".split(
         " "
@@ -48,6 +48,11 @@ const COMMON_EMOJIS =
 export default function ChatPage() {
     const { eventId: idParam, slug } = useParams();
     const eventKey = idParam ?? slug;
+
+    const location = useLocation();
+    const coverFromNav = location.state?.coverImage || null;   // ← from EventHero
+    const titleFromNav = location.state?.title || "";
+    const subtitleFromNav = location.state?.subtitle || "";
 
     const { user } = useAuth();
     const myLabel = useMemo(
@@ -189,7 +194,6 @@ export default function ChatPage() {
         const end = el.selectionEnd ?? text.length;
         const next = text.slice(0, start) + emoji + text.slice(end);
         setText(next);
-        // restore caret after React updates state
         setTimeout(() => {
             el.focus();
             const pos = start + emoji.length;
@@ -197,14 +201,18 @@ export default function ChatPage() {
         }, 0);
     };
 
-    // background image from event (customize keys to your Event model)
-    const bgUrl =
-        event?.coverUrl ||
-        event?.cover?.url ||
-        event?.bannerUrl ||
-        event?.images?.banner ||
-        event?.heroImage ||
-        null;
+    // unified hero image (first available key)
+    const heroImage = useMemo(() => {
+        return (
+            coverFromNav ||
+            event?.coverImage ||
+            event?.cover?.url ||
+            event?.bannerUrl ||
+            event?.images?.banner ||
+            event?.heroImage ||
+            null
+        );
+    }, [coverFromNav, event]);
 
     // group rows by day
     const rows = [];
@@ -237,7 +245,6 @@ export default function ChatPage() {
             sender: myLabel,
             createdAt: new Date().toISOString(),
         };
-        // optimistic
         if (!msgIndex.current.has(tmpId)) {
             msgIndex.current.set(tmpId, true);
             setMessages((prev) => [...prev, tmp]);
@@ -260,18 +267,34 @@ export default function ChatPage() {
     const title = event?.title ?? "Event Chat";
     const subTitle = event?.subtitle || event?.slug || "";
 
+    useEffect(() => {
+        console.log("chat route coverFromNav:", coverFromNav);
+        console.log("event cover candidates:", {
+            coverImage: event?.coverImage,
+            coverUrl: event?.cover?.url,
+            bannerUrl: event?.bannerUrl,
+            imagesBanner: event?.images?.banner,
+            heroImage: event?.heroImage,
+        });
+    }, [event, coverFromNav]);
+
     return (
         <div className="relative min-h-screen">
-            {/* Background image + gradient overlay */}
-            {bgUrl && (
-                <>
-                    <div
-                        className="pointer-events-none absolute inset-0 -z-10 bg-cover bg-center"
-                        style={{ backgroundImage: `url(${bgUrl})` }}
+            {/* single background from the event */}
+            {/* Background layer (image optional) */}
+            <div className="absolute inset-0 z-0 pointer-events-none">
+                {heroImage && (
+                    <img
+                        src={heroImage}
+                        alt={event?.title || "Event cover"}
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                        decoding="async"
                     />
-                    <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-background/85 via-background/90 to-background" />
-                </>
-            )}
+                )}
+                {/* black bottom → white top */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-white" />
+            </div>
 
             <div className="mx-auto max-w-3xl py-8 px-3 md:px-0">
                 {/* Header */}
@@ -402,7 +425,6 @@ export default function ChatPage() {
                                                 className="h-8 w-8 select-none rounded-lg hover:bg-muted"
                                                 onClick={() => {
                                                     insertEmoji(em);
-                                                    // keep open so user can add multiple
                                                     textareaRef.current?.focus();
                                                 }}
                                                 title={em}
