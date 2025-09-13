@@ -21,7 +21,9 @@ import PeoplePublicProfile from "@/pages/events/PeoplePublicProfile";
 import TicketSuccess from "@/pages/TicketSuccess";
 import DummyCheckout from "@/pages/DummyCheckout";
 import CheckinScanner from "@/pages/CheckinScanner";
-import Chat from "@/pages/Chat"
+import Chat from "@/pages/Chat";
+import ChatHub from "@/pages/ChatHub";
+import GlobalChat from "@/pages/GlobalChat";
 
 export default function AppRoutes() {
   return (
@@ -63,6 +65,11 @@ export default function AppRoutes() {
         <Route path="/events/:slug/attendees/:memberId" element={<PeoplePublicProfile />} />
         {/* Legacy event detail by id */}
         <Route path="/events/id/:id" element={<EventDetail />} />
+        {/* Chat hub + global chat */}
+        <Route path="/chat" element={<ChatHub />} />
+        <Route path="/chat/global" element={<GlobalChat />} />
+        {/* Event chat by slug OR by id */}
+        <Route path="/events/:slug/chat" element={<Chat />} />
         <Route path="/events/:eventId/chat" element={<Chat />} />
       </Route>
 

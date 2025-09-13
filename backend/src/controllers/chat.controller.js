@@ -93,3 +93,69 @@ export async function createEventMessage(req, res, next) {
         next(err);
     }
 }
+
+export async function listGlobalMessages(req, res, next) {
+    try {
+        const { before, limit = 200 } = req.query;
+        const pageSize = Math.min(Math.max(parseInt(limit, 10) || 200, 1), 500);
+
+        let query = Message.find({ eventId: null });
+        if (before && mongoose.isValidObjectId(before)) {
+            query = query.where("_id").lt(before);
+        }
+
+        const docs = await query
+            .sort({ createdAt: 1 })
+            .limit(pageSize)
+            .populate("sender", "fullName username")
+            .lean();
+
+        res.json(
+            docs.map((d) => ({
+                _id: String(d._id),
+                text: d.text,
+                sender: d.sender
+                    ? {
+                        _id: String(d.sender._id),
+                        fullName: d.sender.fullName || "",
+                        username: d.sender.username || "",
+                    }
+                    : null,
+                createdAt: d.createdAt,
+            }))
+        );
+    } catch (err) {
+        next(err);
+    }
+}
+
+/**
+ * POST /api/chat/global/messages
+ * Body: { text }
+ */
+export async function createGlobalMessage(req, res, next) {
+    try {
+        const text = String(req.body?.text || "").trim();
+        if (!text) return res.status(400).json({ message: "Text is required" });
+
+        const msg = await Message.create({
+            sender: req.user._id,
+            text,
+            eventId: null, // global
+        });
+
+        // shape consistent with list response
+        res.status(201).json({
+            _id: String(msg._id),
+            text: msg.text,
+            sender: {
+                _id: String(req.user._id),
+                fullName: req.user.fullName || "",
+                username: req.user.username || "",
+            },
+            createdAt: msg.createdAt,
+        });
+    } catch (err) {
+        next(err);
+    }
+}

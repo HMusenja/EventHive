@@ -10,6 +10,7 @@ import {
   UserRound,
   Sun,
   Moon,
+  MessageSquareText,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { Link, useNavigate } from "react-router-dom";
@@ -35,6 +36,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useTheme } from "@/context/ThemeContext";
 import ThemeToggle from "./ThemeToggle";
 import AuthModal from "../AuthModal";
+import GlobalChatButton from "@/components/nav/GlobalChatButton";
 
 function relativeTime(ts) {
   if (!ts) return "Just now";
@@ -137,6 +139,9 @@ export default function Navbar() {
               <Search className="mr-2 h-4 w-4" /> Search
             </Button>
 
+            {/* ⬇️ Global Chat */}
+            <GlobalChatButton />
+
             <div className="hidden md:flex items-center">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -234,6 +239,17 @@ export default function Navbar() {
                     <a href="#features" className="text-sm text-foreground">Features</a>
                     <a href="#about" className="text-sm text-foreground">About</a>
                     <a href="#blog" className="text-sm text-foreground">Blog</a>
+
+                    {/* ⬇️ Global Chat */}
+                    <SheetClose asChild>
+                      <Link
+                        to="/chat/global"
+                        className="text-sm text-foreground inline-flex items-center gap-2"
+                      >
+                        <MessageSquareText className="h-4 w-4" />
+                        Global chat
+                      </Link>
+                    </SheetClose>
                   </div>
 
                   <Separator />
