@@ -60,5 +60,7 @@ export async function suggestTags(eventId, q) {
 
 // If you keep this alias, make it call the same endpoint as updateMyEventProfile
 export async function putAttendeeProfile(eventId, payload) {
+
   return updateMyEventProfile(eventId, payload);
+
 }

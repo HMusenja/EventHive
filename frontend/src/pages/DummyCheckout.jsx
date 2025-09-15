@@ -1,6 +1,6 @@
 // src/pages/DummyCheckout.jsx
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState,useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { completeDummyPayment } from "@/services/ticketsApi";
@@ -13,6 +13,7 @@ export default function DummyCheckout() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const navigate = useNavigate();
+    const fired = useRef(false);
 
   async function handlePay() {
     if (!orderId) return;
@@ -21,11 +22,13 @@ export default function DummyCheckout() {
     try {
       await completeDummyPayment(orderId);
       const qs = new URLSearchParams();
+       qs.set("order", orderId); 
       if (eventId) qs.set("event", eventId);
       if (ticketId) qs.set("ticket", ticketId);
       navigate(`/tickets/success?${qs.toString()}`);
     } catch (e) {
       setErr(e?.message || "Payment failed");
+        fired.current = false
     } finally {
       setBusy(false);
     }

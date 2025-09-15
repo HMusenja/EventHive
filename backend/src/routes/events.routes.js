@@ -6,6 +6,7 @@ import {
   createEvent,
   getMyOrganizing,
   getMyAttending,
+  updateOrganizerProfile,
 } from "../controllers/events.controller.js";
 import { getEventAttendeeCount } from "../controllers/attendeeController.js";
 import { getEventDashboardStats } from "../controllers/eventAnalyticsController.js";
@@ -29,6 +30,6 @@ router.get(
   requireEventRole(["organizer","staff"]),
   getEventDashboardStats
 );
-
+router.put("/:eventId/organizer-profile", checkToken, updateOrganizerProfile);
 export default router;
 

@@ -10,14 +10,14 @@ import { checkoutGuest } from "@/services/ticketsApi";
 
 export default function GuestCheckoutForm({
   eventId,
-  ticket,         // { _id, name, priceCents, currency }
-  onBack,         // callback to go back to button row
+  ticket, // { _id, name, priceCents, currency }
+  onBack, // callback to go back to button row
 }) {
-  const [fullName, setFullName]   = useState("");
-  const [email, setEmail]         = useState("");
-  const [qty, setQty]             = useState(1);
-  const [consent, setConsent]     = useState(false);
-  const [promo, setPromo]         = useState("");   // disabled UX
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [qty, setQty] = useState(1);
+  const [consent, setConsent] = useState(false);
+  const [promo, setPromo] = useState(""); // disabled UX
   const [submitting, setSubmitting] = useState(false);
   const [errBanner, setErrBanner] = useState(null);
   const navigate = useNavigate();
@@ -31,7 +31,13 @@ export default function GuestCheckoutForm({
   }, [ticket, qty, isFree]);
 
   const emailOk = /\S+@\S+\.\S+/.test(email);
-  const canSubmit = ticket?._id && consent && emailOk && fullName.trim().length >= 2 && qty >= 1 && !submitting;
+  const canSubmit =
+    ticket?._id &&
+    consent &&
+    emailOk &&
+    fullName.trim().length >= 2 &&
+    qty >= 1 &&
+    !submitting;
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -49,26 +55,34 @@ export default function GuestCheckoutForm({
 
       // Free → success screen
       if (res?.success && res?.mode === "free" && res?.orderId) {
-       navigate(`/tickets/success?event=${eventId}&ticket=${ticket._id}`);
+       navigate(`/tickets/success?event=${eventId}&ticket=${ticket._id}&order=${res.orderId}`)
         return;
       }
       // Paid → redirect to dummy session URL
-    if (res?.url) {
-  const qs = new URLSearchParams();
-  qs.set("order", res.orderId);
-  qs.set("event", eventId);
-  qs.set("ticket", ticket._id);
-  // SPA navigate so your router catches the route
-  navigate(`/pay/dummy-checkout?${qs.toString()}`);
-  return;
-}
+      if (res?.url) {
+        const qs = new URLSearchParams();
+        qs.set("order", res.orderId);
+        qs.set("event", eventId);
+        qs.set("ticket", ticket._id);
+        // SPA navigate so your router catches the route
+        navigate(`/pay/dummy-checkout?${qs.toString()}`);
+        return;
+      }
+
       // Fallback: just show success screen
-      navigate("/tickets/success");
+      // navigate("/tickets/success");
     } catch (err) {
       if (err?.code === "EMAIL_EXISTS") {
-        setErrBanner({ code: err.code, message: "This email already has an account. Please log in or register to continue." });
+        setErrBanner({
+          code: err.code,
+          message:
+            "This email already has an account. Please log in or register to continue.",
+        });
       } else {
-        setErrBanner({ code: err?.code || "HTTP_ERROR", message: err?.message || "Something went wrong" });
+        setErrBanner({
+          code: err?.code || "HTTP_ERROR",
+          message: err?.message || "Something went wrong",
+        });
       }
     } finally {
       setSubmitting(false);
@@ -121,12 +135,18 @@ export default function GuestCheckoutForm({
             value={qty}
             onChange={(e) => {
               const v = Number(e.target.value);
-              const clamped = Number.isFinite(v) ? Math.max(1, Math.min(20, v)) : 1;
+              const clamped = Number.isFinite(v)
+                ? Math.max(1, Math.min(20, v))
+                : 1;
               setQty(clamped);
             }}
             className="mt-1"
           />
-          {ticket && <div className="text-xs text-muted-foreground mt-1">Total: {totalText}</div>}
+          {ticket && (
+            <div className="text-xs text-muted-foreground mt-1">
+              Total: {totalText}
+            </div>
+          )}
         </div>
 
         {/* Promo code (disabled for now) */}
@@ -140,22 +160,38 @@ export default function GuestCheckoutForm({
             placeholder="Coming soon"
             disabled
           />
-          <div className="text-xs text-muted-foreground mt-1">Promo codes not supported yet.</div>
+          <div className="text-xs text-muted-foreground mt-1">
+            Promo codes not supported yet.
+          </div>
         </div>
       </div>
 
       <div className="flex items-start gap-2">
-        <Checkbox id="consent" checked={!!consent} onCheckedChange={(v) => setConsent(!!v)} />
+        <Checkbox
+          id="consent"
+          checked={!!consent}
+          onCheckedChange={(v) => setConsent(!!v)}
+        />
         <Label htmlFor="consent" className="leading-snug">
-          I agree to the Terms and Privacy Policy and consent to receive ticket emails.
+          I agree to the Terms and Privacy Policy and consent to receive ticket
+          emails.
         </Label>
       </div>
 
       <div className="flex gap-2">
         <Button type="submit" size="lg" disabled={!canSubmit}>
-          {submitting ? "Processing..." : isFree ? "Get Free Ticket" : "Continue to Payment"}
+          {submitting
+            ? "Processing..."
+            : isFree
+              ? "Get Free Ticket"
+              : "Continue to Payment"}
         </Button>
-        <Button type="button" variant="ghost" onClick={onBack} disabled={submitting}>
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={onBack}
+          disabled={submitting}
+        >
           Back
         </Button>
       </div>

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import OnboardCtaButton from "./OnboardCtaButton";
+// import GuestCheckoutForm from "@/components/ticket/GuestCheckoutForm";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -76,7 +77,7 @@ function GuestCheckoutForm({ eventId, ticket, onBack }) {
         return;
       }
       // Fallback
-      navigate("/tickets/success");
+      // navigate("/tickets/success");
     } catch (err) {
       if (err?.code === "EMAIL_EXISTS") {
         setErrBanner({
