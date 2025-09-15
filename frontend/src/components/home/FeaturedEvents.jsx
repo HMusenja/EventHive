@@ -1,4 +1,3 @@
-// src/components/home/FeaturedEvents.jsx
 import { useMemo, useRef } from "react";
 import { useEvents } from "@/context/EventContext";
 import EventCard from "@/components/event/EventCard";

@@ -1,6 +1,6 @@
-// models/User.js
 import { Schema, model } from "mongoose";
 import bcrypt from "bcryptjs";
+
 const { ObjectId } = Schema.Types;
 
 const AccountStatusEnum = ["active", "suspended", "deleted"];

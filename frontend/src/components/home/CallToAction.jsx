@@ -15,7 +15,7 @@ export default function CallToAction() {
             <Button size="lg" className="border-0 bg-gradient-vibrant text-vibrant-foreground hover:shadow-vibrant px-8">
               Start Free Trial <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
-            <Button size="lg" variant="outline" className="border-white/30 text-white hover:bg-white/10 px-8">
+            <Button size="lg" variant="outline" className="border-white/30 hover:bg-white/5 px-8">
               Contact Sales
             </Button>
           </div>

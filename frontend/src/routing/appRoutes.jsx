@@ -5,6 +5,7 @@ import Register from "@/pages/Register";
 import EventDetail from "@/pages/EventDetail";
 import EventList from "@/pages/EventList";
 
+
 import Dashboard from "@/pages/dashboard/Dashboard";
 import OrganizerLayout from "@/pages/OrganizerLayout";
 import Sales from "@/pages/dashboard/organizer/Sales";
@@ -12,13 +13,8 @@ import Events from "@/pages/dashboard/organizer/Events";
 import Exports from "@/pages/dashboard/organizer/Exports";
 import Analytics from "@/pages/dashboard/organizer/Analytics";
 
-
-
 import RequestMeeting from "@/pages/RequestMeeting";
 import MyMeetings from "@/pages/MyMeetings";
-
-
-
 import AccountLayout from "@/pages/AccountLayout";
 import Profile from "@/pages/account/Profile";
 import Matches from "@/pages/account/Matches";
@@ -34,6 +30,9 @@ import PeoplePublicProfile from "@/pages/events/PeoplePublicProfile";
 import TicketSuccess from "@/pages/TicketSuccess";
 import DummyCheckout from "@/pages/DummyCheckout";
 import CheckinScanner from "@/pages/CheckinScanner";
+import Chat from "@/pages/Chat";
+import ChatHub from "@/pages/ChatHub";
+import GlobalChat from "@/pages/GlobalChat";
 
 export default function AppRoutes() {
   return (
@@ -47,13 +46,14 @@ export default function AppRoutes() {
         {/* Events listing */}
         <Route path="/events" element={<EventList />} />
 
-        
-        {/* <Route path="/events/:id/tickets" element={<Tickets />} /> */}
+
+
+       {/* <Route path="/events/:id/tickets" element={<Tickets />} /> */}
+
         <Route path="/tickets" element={<Tickets />} />
         <Route path="/tickets/success" element={<TicketSuccess />} />
         <Route path="/events/:eventId/network/request/:userId" element={<RequestMeeting />} />
         <Route path="/events/:eventId/meetings" element={<MyMeetings />} />
-
 
         {/* Protected */}
         {/* <Route
@@ -64,10 +64,6 @@ export default function AppRoutes() {
           </ProtectedRoute>
         }
       />
-
-      
-    
-
 
         {/* Event detail by slug (preferred) */}
         <Route path="/events/:slug" element={<EventDetail />} />
@@ -83,8 +79,10 @@ export default function AppRoutes() {
         {/* Onboarding + Tickets by slug */}
         <Route path="/events/:slug/onboarding" element={<EventOnboardingPage />} />
         <Route path="/events/:slug/tickets" element={<Tickets />} />
-          <Route path="/events/id/:id/tickets" element={<Tickets />} />
-    
+
+        <Route path="/events/id/:id/tickets" element={<Tickets />} />
+
+
         <Route path="/pay/dummy-checkout" element={<DummyCheckout />} />
         <Route path="/events/:eventId/checkin" element={<CheckinScanner />} />
 
@@ -92,9 +90,16 @@ export default function AppRoutes() {
         <Route path="/events/:slug/me" element={<EventProfilePage />} />
         <Route path="/events/:slug/people" element={<PeopleSuggestionsPage />} />
         <Route path="/events/:slug/attendees/:memberId" element={<PeoplePublicProfile />} />
-
         {/* Legacy event detail by id */}
         <Route path="/events/id/:id" element={<EventDetail />} />
+
+        {/* Chat hub + global chat */}
+        <Route path="/chat" element={<ChatHub />} />
+        <Route path="/chat/global" element={<GlobalChat />} />
+        {/* Event chat by slug OR by id */}
+        <Route path="/events/:slug/chat" element={<Chat />} />
+        <Route path="/events/:eventId/chat" element={<Chat />} />
+
 
       </Route>
 
@@ -109,8 +114,8 @@ export default function AppRoutes() {
         <Route path="settings" element={<Settings />} />
       </Route>
 
-
       {/* 404 fallback (optional) */}
+      <Route path="*" element={<div>404 Not Found</div>} />
       {/* <Route path="*" element={<NotFound />} /> */}
     </Routes>
   );

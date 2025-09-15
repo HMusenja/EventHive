@@ -4,10 +4,18 @@ import { Badge } from "@/components/ui/badge";
 import SmartGetTicketButton from "./SmartGetTicketButton";
 
 
-export default function EventHero({ event, membership, profileUrl, attendeeCount,  memberCount, checkedInCount }) {
+export default function EventHero({ event, membership, profileUrl, attendeeCount, memberCount, checkedInCount, chatUrl }) {
   const start = new Date(event.startAt);
   const end = new Date(event.endAt);
 
+  // pick the best cover we have on the Event page
+  const coverForState =
+    event.coverImage ??
+    event?.cover?.url ??
+    event?.bannerUrl ??
+    event?.images?.banner ??
+    event?.heroImage ??
+    null;
 
   const dateStr = `${start.toLocaleDateString(undefined, {
     dateStyle: "medium",
@@ -19,7 +27,6 @@ export default function EventHero({ event, membership, profileUrl, attendeeCount
     membership.status !== "rejected";
 
   const pluralize = (n, s, p = s + "s") => `${n} ${n === 1 ? s : p}`;
-
 
   return (
     <section className="relative min-h-[60vh] flex items-end">
@@ -43,7 +50,7 @@ export default function EventHero({ event, membership, profileUrl, attendeeCount
         {/* Counts */}
         {(typeof attendeeCount === "number" || typeof checkedInCount === "number") && (
           <div className="mt-2 flex items-center gap-3 text-sm">
-              {typeof memberCount === "number" && (
+            {typeof memberCount === "number" && (
               <span className="text-muted-foreground">
                 {pluralize(memberCount, "member")}
               </span>
@@ -61,16 +68,27 @@ export default function EventHero({ event, membership, profileUrl, attendeeCount
           </div>
         )}
 
-
         <div className="mt-6 flex flex-wrap gap-3">
           <SmartGetTicketButton event={event}>
             Get Tickets
           </SmartGetTicketButton>
 
-
           <Button variant="outline" size="lg" asChild>
             <a href="#agenda">View Agenda</a>
           </Button>
+
+          {chatUrl && (
+            <Link
+              to={chatUrl}
+              state={{
+                coverImage: coverForState,
+                title: event.title,
+                subtitle: event.subtitle || event.slug || "",
+              }}
+            >
+              <Button variant="default" size="lg">💬 Join Event Chat</Button>
+            </Link>
+          )}
 
           {hasProfile && (
             <Button size="lg" asChild>

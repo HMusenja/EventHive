@@ -1,17 +1,16 @@
+// src/pages/GlobalChat.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams, useLocation } from "react-router-dom";
 import socket, { connectSocket } from "@/lib/socket";
 import api from "@/lib/axios";
 import { useAuth } from "@/context/AuthContext";
 import { Send, Smile, Paperclip, Loader2, MessageSquareText } from "lucide-react";
 
-/* ------------ helpers ------------ */
+/* ------------ helpers (same as your Chat) ------------ */
 const labelFor = (sender) => {
     if (!sender) return "Anon";
     if (typeof sender === "string") return sender;
     return sender.fullName || sender.username || "Anon";
 };
-
 const initials = (name) =>
     String(name || "??")
         .split(" ")
@@ -19,7 +18,6 @@ const initials = (name) =>
         .join("")
         .slice(0, 2)
         .toUpperCase();
-
 const formatTime = (d) => {
     try {
         const dd = new Date(d);
@@ -28,16 +26,6 @@ const formatTime = (d) => {
         return "";
     }
 };
-
-const isSameDay = (a, b) => {
-    const da = new Date(a), db = new Date(b);
-    return (
-        da.getFullYear() === db.getFullYear() &&
-        da.getMonth() === db.getMonth() &&
-        da.getDate() === db.getDate()
-    );
-};
-
 /* Tiny emoji palette */
 const COMMON_EMOJIS =
     "😀 😁 😂 🤣 😊 🙂 🙃 😉 😍 😘 🤗 🤩 🤔 😏 😴 😮 😱 😅 😆 😇 🤤 😋 😎 🥳 🤠 😤 😡 😭 😢 🤯 🤬 🙏 🤝 👍 👎 👏 ✨ 🎉 💯 🔥 💡 🧠 🫶 ❤️ 🩷 🧡 💛 💚 💙 💜 🤍 🤎 🖤 ☕ 🍀 🌟 🌈 🌊 🌞 🌙 💫 📎 📌 📨".split(
@@ -45,38 +33,27 @@ const COMMON_EMOJIS =
     );
 
 /* ------------ main component ------------ */
-export default function ChatPage() {
-    const { eventId: idParam, slug } = useParams();
-    const eventKey = idParam ?? slug;
-
-    const location = useLocation();
-    const coverFromNav = location.state?.coverImage || null;   // ← from EventHero
-    const titleFromNav = location.state?.title || "";
-    const subtitleFromNav = location.state?.subtitle || "";
-
+export default function GlobalChat() {
     const { user } = useAuth();
     const myLabel = useMemo(
         () => user?.fullName || user?.username || "Anon",
         [user?.fullName, user?.username]
     );
 
-    const [event, setEvent] = useState(null);
     const [messages, setMessages] = useState([]);
     const [text, setText] = useState("");
     const [loadingHistory, setLoadingHistory] = useState(true);
     const [showEmoji, setShowEmoji] = useState(false);
 
-    // avoid duplicates
-    const msgIndex = useRef(new Map());
-    const pendingByText = useRef(new Map());
-
+    // de-dupe + optimistic controls
+    const msgIndex = useRef(new Map());          // _id -> true
+    const pendingByText = useRef(new Map());     // text -> { tmpId, ts }
     const upsert = (m) => {
         if (!m?._id) m._id = `tmp-${Date.now()}-${Math.random()}`;
         if (msgIndex.current.has(m._id)) return;
         msgIndex.current.set(m._id, true);
         setMessages((prev) => [...prev, m]);
     };
-
     const replaceTmpWithSaved = (tmpId, saved) => {
         msgIndex.current.set(saved._id, true);
         setMessages((prev) => {
@@ -88,38 +65,19 @@ export default function ChatPage() {
         });
     };
 
-    // Load event
+    // Load history for GLOBAL
     useEffect(() => {
-        if (!eventKey) return;
-        let alive = true;
-        (async () => {
-            try {
-                const { data } = await api.get(`events/${eventKey}`);
-                if (!alive) return;
-                setEvent(data);
-            } catch (e) {
-                console.error("[chat] Failed to load event", e);
-            }
-        })();
-        return () => {
-            alive = false;
-        };
-    }, [eventKey]);
-
-    // Load history
-    useEffect(() => {
-        if (!eventKey) return;
         let alive = true;
         setLoadingHistory(true);
         (async () => {
             try {
-                const { data } = await api.get(`events/${eventKey}/messages`);
+                const { data } = await api.get("chat/global/messages");
                 if (!alive) return;
                 msgIndex.current = new Map();
                 setMessages([]);
                 data.forEach(upsert);
             } catch (e) {
-                console.error("[chat] Failed to load messages", e);
+                console.error("[global-chat] Failed to load messages", e);
             } finally {
                 if (alive) setLoadingHistory(false);
             }
@@ -127,16 +85,17 @@ export default function ChatPage() {
         return () => {
             alive = false;
         };
-    }, [eventKey]);
+    }, []);
 
-    // Socket join + listeners
+    // Socket join + listeners for GLOBAL
     useEffect(() => {
-        if (!user || !event?._id) return;
+        if (!user) return;
 
         connectSocket();
 
-        const roomId = String(event._id);
+        const ROOM = "global";
         const onMsg = (msg) => {
+            // Reconcile my optimistic msg with server broadcast/ack
             const senderLabel = labelFor(msg.sender);
             if (senderLabel === myLabel && pendingByText.current.has(msg.text)) {
                 const { tmpId, ts } = pendingByText.current.get(msg.text) || {};
@@ -149,20 +108,19 @@ export default function ChatPage() {
             }
             upsert(msg);
         };
-
         const onErr = (err) =>
             console.error("[socket] connect_error:", err?.message || err);
 
         socket.on("connect_error", onErr);
-        socket.emit("join_room", roomId);
-        socket.on("event_message", onMsg);
+        socket.emit("join_room", ROOM);
+        socket.on("chat_message", onMsg);
 
         return () => {
-            socket.off("event_message", onMsg);
+            socket.off("chat_message", onMsg);
             socket.off("connect_error", onErr);
-            socket.emit("leave_room", roomId);
+            socket.emit("leave_room", ROOM);
         };
-    }, [event?._id, myLabel, user?._id]);
+    }, [myLabel, user?._id]);
 
     // auto-scroll
     const scrollerRef = useRef(null);
@@ -183,7 +141,6 @@ export default function ChatPage() {
         document.addEventListener("mousedown", onDocClick);
         return () => document.removeEventListener("mousedown", onDocClick);
     }, []);
-
     const insertEmoji = (emoji) => {
         const el = textareaRef.current;
         if (!el) {
@@ -201,50 +158,21 @@ export default function ChatPage() {
         }, 0);
     };
 
-    // unified hero image (first available key)
-    const heroImage = useMemo(() => {
-        return (
-            coverFromNav ||
-            event?.coverImage ||
-            event?.cover?.url ||
-            event?.bannerUrl ||
-            event?.images?.banner ||
-            event?.heroImage ||
-            null
-        );
-    }, [coverFromNav, event]);
-
-    // group rows by day
-    const rows = [];
-    let last = null;
-    for (const m of messages) {
-        if (!last || !isSameDay(last.createdAt, m.createdAt)) {
-            rows.push({
-                _kind: "day",
-                key: `day-${new Date(m.createdAt).toDateString()}`,
-                label: new Date(m.createdAt).toLocaleDateString(undefined, {
-                    weekday: "short",
-                    month: "short",
-                    day: "numeric",
-                }),
-            });
-        }
-        rows.push({ _kind: "msg", ...m });
-        last = m;
-    }
-
+    // Send (GLOBAL)
     const sendMessage = (e) => {
         e.preventDefault();
         const trimmed = text.trim();
-        if (!trimmed || !event?._id) return;
+        if (!trimmed) return;
 
         const tmpId = `tmp-${Date.now()}`;
         const tmp = {
             _id: tmpId,
             text: trimmed,
-            sender: myLabel,
+            sender: myLabel,               // string works with your labelFor()
             createdAt: new Date().toISOString(),
+            room: "global",
         };
+
         if (!msgIndex.current.has(tmpId)) {
             msgIndex.current.set(tmpId, true);
             setMessages((prev) => [...prev, tmp]);
@@ -253,9 +181,10 @@ export default function ChatPage() {
         pendingByText.current.set(trimmed, { tmpId, ts: Date.now() });
 
         socket.emit(
-            "event_message",
-            { eventId: String(event._id), text: trimmed },
+            "chat_message",
+            { room: "global", text: trimmed },
             (saved) => {
+                // ack from server (if provided)
                 if (saved && saved._id) {
                     pendingByText.current.delete(trimmed);
                     replaceTmpWithSaved(tmpId, saved);
@@ -264,37 +193,10 @@ export default function ChatPage() {
         );
     };
 
-    const title = event?.title ?? "Event Chat";
-    const subTitle = event?.subtitle || event?.slug || "";
-
-    useEffect(() => {
-        console.log("chat route coverFromNav:", coverFromNav);
-        console.log("event cover candidates:", {
-            coverImage: event?.coverImage,
-            coverUrl: event?.cover?.url,
-            bannerUrl: event?.bannerUrl,
-            imagesBanner: event?.images?.banner,
-            heroImage: event?.heroImage,
-        });
-    }, [event, coverFromNav]);
-
     return (
         <div className="relative min-h-screen">
-            {/* single background from the event */}
-            {/* Background layer (image optional) */}
-            <div className="absolute inset-0 z-0 pointer-events-none">
-                {heroImage && (
-                    <img
-                        src={heroImage}
-                        alt={event?.title || "Event cover"}
-                        className="h-full w-full object-cover"
-                        loading="lazy"
-                        decoding="async"
-                    />
-                )}
-                {/* black bottom → white top */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-white" />
-            </div>
+            {/* black → white backdrop (simple + readable) */}
+            <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-t from-black/80 via-black/10 to-white" />
 
             <div className="mx-auto max-w-3xl py-8 px-3 md:px-0">
                 {/* Header */}
@@ -304,11 +206,11 @@ export default function ChatPage() {
                     </div>
                     <div>
                         <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
-                            {title}
+                            🌍 Global Chat
                         </h1>
-                        {!!subTitle && (
-                            <p className="text-sm text-muted-foreground">{subTitle}</p>
-                        )}
+                        <p className="text-sm text-muted-foreground">
+                            Say hi to everyone across events
+                        </p>
                     </div>
                 </div>
 
@@ -326,27 +228,19 @@ export default function ChatPage() {
                             </div>
                         )}
 
-                        {!loadingHistory && rows.length === 0 && (
+                        {!loadingHistory && messages.length === 0 && (
                             <div className="text-center text-muted-foreground py-10">
                                 Be the first to say hello ✨
                             </div>
                         )}
 
-                        {rows.map((row) =>
-                            row._kind === "day" ? (
-                                <div key={row.key} className="sticky top-2 z-10">
-                                    <div className="mx-auto w-max rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground shadow-sm">
-                                        {row.label}
-                                    </div>
-                                </div>
-                            ) : (
-                                <MessageBubble
-                                    key={row._id}
-                                    msg={row}
-                                    isMe={labelFor(row.sender) === myLabel}
-                                />
-                            )
-                        )}
+                        {messages.map((m) => (
+                            <MessageBubble
+                                key={m._id}
+                                msg={m}
+                                isMe={labelFor(m.sender) === myLabel}
+                            />
+                        ))}
                     </div>
 
                     {/* Composer */}
@@ -390,7 +284,7 @@ export default function ChatPage() {
 
                             <button
                                 type="submit"
-                                disabled={!text.trim() || !event?._id}
+                                disabled={!text.trim()}
                                 className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-primary-foreground shadow hover:brightness-110 disabled:opacity-50"
                             >
                                 <Send className="h-4 w-4" />
@@ -452,7 +346,7 @@ export default function ChatPage() {
     );
 }
 
-/* --- Bubble component --- */
+/* --- Bubble (same style as event chat) --- */
 function MessageBubble({ msg, isMe }) {
     const who = labelFor(msg.sender);
     const when = formatTime(msg.createdAt);

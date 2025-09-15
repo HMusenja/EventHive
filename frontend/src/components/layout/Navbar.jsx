@@ -8,10 +8,12 @@ import {
   Clock,
   ChevronDown,
   UserRound,
+  Sun,
+  Moon,
+  MessageSquareText,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { Link, useNavigate } from "react-router-dom";
-
 import {
   Sheet,
   SheetTrigger,
@@ -22,7 +24,6 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
-
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,12 +32,12 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { useTheme } from "@/context/ThemeContext";
 import ThemeToggle from "./ThemeToggle";
 import AuthModal from "../AuthModal";
+import GlobalChatButton from "@/components/nav/GlobalChatButton";
 
-// Small helper to show "x min ago"
 function relativeTime(ts) {
   if (!ts) return "Just now";
   const d =
@@ -61,10 +62,10 @@ function relativeTime(ts) {
 export default function Navbar() {
   const { user, logout, refreshMe, loading, initialized } = useAuth();
   const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
 
-  // Auth modal controls
   const [authOpen, setAuthOpen] = useState(false);
-  const [authMode, setAuthMode] = useState("login"); // "login" | "register"
+  const [authMode, setAuthMode] = useState("login");
 
   async function handleAuthSuccess() {
     await refreshMe();
@@ -75,6 +76,7 @@ export default function Navbar() {
     await logout();
     navigate("/");
   }
+
   const isAuthed = !!user;
   const displayName = useMemo(() => {
     if (!initialized || loading) return "…";
@@ -98,54 +100,52 @@ export default function Navbar() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
           {/* Brand */}
-          <Link to="/" className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              if (window.location.pathname === "/") {
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              } else {
+                window.location.href = "/";
+              }
+            }}
+            className="flex items-center gap-2"
+          >
             <div className="h-8 w-8 rounded-lg bg-gradient-vibrant shadow-vibrant" />
             <span className="text-xl font-bold">EventHive</span>
-          </Link>
+          </button>
 
           {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-8 text-sm">
-            <a
-              href="#events"
-              className="text-muted-foreground hover:text-foreground"
-            >
+            <a href="#events" className="text-muted-foreground hover:text-foreground">
               Events
             </a>
-            <a
-              href="#features"
-              className="text-muted-foreground hover:text-foreground"
-            >
+            <a href="#features" className="text-muted-foreground hover:text-foreground">
               Features
             </a>
-            <a
-              href="#about"
-              className="text-muted-foreground hover:text-foreground"
-            >
+            <a href="#about" className="text-muted-foreground hover:text-foreground">
               About
             </a>
-            <a
-              href="#blog"
-              className="text-muted-foreground hover:text-foreground"
-            >
+            <a href="#blog" className="text-muted-foreground hover:text-foreground">
               Blog
             </a>
           </nav>
 
-          {/* Right side */}
-          <div className="flex items-center gap-3">
-            {/* Search (hide on very small screens) */}
+          {/* Right side controls */}
+          <div className="flex items-center gap-2">
+            {/* Theme toggle direct */}
+            <ThemeToggle withMenu={false} />
+
             <Button variant="ghost" size="sm" className="hidden sm:flex">
               <Search className="mr-2 h-4 w-4" /> Search
             </Button>
 
-            {/* md+ : Avatar + Username always visible with dropdown */}
+            {/* ⬇️ Global Chat */}
+            <GlobalChatButton />
+
             <div className="hidden md:flex items-center">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button
-                    className="inline-flex items-center gap-2 rounded-xl border border-border px-2.5 py-1.5 hover:bg-muted transition"
-                    aria-label="Open user menu"
-                  >
+                  <button className="inline-flex items-center gap-2 rounded-xl border border-border px-2.5 py-1.5 hover:bg-muted transition">
                     <Avatar className="h-7 w-7">
                       {user?.avatarUrl ? (
                         <AvatarImage src={user.avatarUrl} alt={displayName} />
@@ -159,7 +159,6 @@ export default function Navbar() {
                     <ChevronDown className="h-4 w-4" />
                   </button>
                 </DropdownMenuTrigger>
-
                 <DropdownMenuContent align="end" className="w-60">
                   <DropdownMenuLabel className="flex items-center gap-2">
                     <Clock className="h-4 w-4" />
@@ -169,52 +168,26 @@ export default function Navbar() {
                   {isAuthed ? (
                     <>
                       <DropdownMenuItem onClick={() => navigate("/account")}>
-                        <UserRound className="mr-2 h-4 w-4" />
-                        <span>Profile</span>
+                        <UserRound className="mr-2 h-4 w-4" /> Profile
                       </DropdownMenuItem>
-
-                      <DropdownMenuItem asChild>
-                        <div className="flex items-center justify-between w-full">
-                          <span>Theme</span>
-                          <ThemeToggle />
-                        </div>
-                      </DropdownMenuItem>
-
                       <DropdownMenuSeparator />
-
                       <DropdownMenuItem onClick={handleLogout}>
-                        <LogOut className="mr-2 h-4 w-4" />
-                        <span>Logout</span>
+                        <LogOut className="mr-2 h-4 w-4" /> Logout
                       </DropdownMenuItem>
                     </>
                   ) : (
                     <>
-                      <DropdownMenuItem
-                        onClick={() => {
-                          setAuthMode("login");
-                          setAuthOpen(true);
-                        }}
-                      >
-                        <User className="mr-2 h-4 w-4" />
-                        <span>Sign in</span>
+                      <DropdownMenuItem onClick={() => {
+                        setAuthMode("login");
+                        setAuthOpen(true);
+                      }}>
+                        <User className="mr-2 h-4 w-4" /> Sign in
                       </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => {
-                          setAuthMode("register");
-                          setAuthOpen(true);
-                        }}
-                      >
-                        <User className="mr-2 h-4 w-4" />
-                        <span>Register</span>
-                      </DropdownMenuItem>
-
-                      <DropdownMenuSeparator />
-
-                      <DropdownMenuItem asChild>
-                        <div className="flex items-center justify-between w-full">
-                          <span>Theme</span>
-                          <ThemeToggle />
-                        </div>
+                      <DropdownMenuItem onClick={() => {
+                        setAuthMode("register");
+                        setAuthOpen(true);
+                      }}>
+                        <User className="mr-2 h-4 w-4" /> Register
                       </DropdownMenuItem>
                     </>
                   )}
@@ -222,15 +195,10 @@ export default function Navbar() {
               </DropdownMenu>
             </div>
 
-            {/* Mobile menu: ONLY the menu button below md */}
+            {/* Mobile menu button */}
             <Sheet>
               <SheetTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="md:hidden"
-                  aria-label="Open menu"
-                >
+                <Button variant="ghost" size="sm" className="md:hidden">
                   <Menu className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
@@ -242,9 +210,6 @@ export default function Navbar() {
                       <span className="font-bold">EventHive</span>
                     </div>
                   </SheetTitle>
-                  <SheetDescription className="sr-only">
-                    Mobile navigation menu
-                  </SheetDescription>
                 </SheetHeader>
 
                 <div className="mt-6 space-y-4">
@@ -268,81 +233,57 @@ export default function Navbar() {
 
                   <Separator />
 
-                  {/* Nav links */}
+                  {/* Mobile links */}
                   <div className="grid gap-2">
-                    <a href="#events" className="text-sm text-foreground">
-                      Events
-                    </a>
-                    <a href="#features" className="text-sm text-foreground">
-                      Features
-                    </a>
-                    <a href="#about" className="text-sm text-foreground">
-                      About
-                    </a>
-                    <a href="#blog" className="text-sm text-foreground">
-                      Blog
-                    </a>
+                    <a href="#events" className="text-sm text-foreground">Events</a>
+                    <a href="#features" className="text-sm text-foreground">Features</a>
+                    <a href="#about" className="text-sm text-foreground">About</a>
+                    <a href="#blog" className="text-sm text-foreground">Blog</a>
+
+                    {/* ⬇️ Global Chat */}
+                    <SheetClose asChild>
+                      <Link
+                        to="/chat/global"
+                        className="text-sm text-foreground inline-flex items-center gap-2"
+                      >
+                        <MessageSquareText className="h-4 w-4" />
+                        Global chat
+                      </Link>
+                    </SheetClose>
                   </div>
 
                   <Separator />
 
-                  {/* User actions (mobile) */}
+                  {/* User actions */}
                   {isAuthed ? (
                     <div className="grid gap-3">
                       <SheetClose asChild>
-                        <Button
-                          variant="outline"
-                          className="justify-start"
-                          onClick={() => navigate("/dashboard")}
-                        >
+                        <Button variant="outline" onClick={() => navigate("/account")}>
                           <UserRound className="mr-2 h-4 w-4" /> Profile
                         </Button>
                       </SheetClose>
-
-                      <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
-                        <span className="text-sm">Theme</span>
-                        <ThemeToggle />
-                      </div>
-
-                      <Button
-                        variant="ghost"
-                        className="justify-start"
-                        onClick={handleLogout}
-                      >
+                      <Button variant="ghost" onClick={handleLogout}>
                         <LogOut className="mr-2 h-4 w-4" /> Logout
                       </Button>
                     </div>
                   ) : (
                     <div className="grid gap-3">
                       <SheetClose asChild>
-                        <Button
-                          variant="outline"
-                          className="justify-start"
-                          onClick={() => {
-                            setAuthMode("login");
-                            setAuthOpen(true);
-                          }}
-                        >
+                        <Button variant="outline" onClick={() => {
+                          setAuthMode("login");
+                          setAuthOpen(true);
+                        }}>
                           <User className="mr-2 h-4 w-4" /> Sign in
                         </Button>
                       </SheetClose>
-
                       <SheetClose asChild>
-                        <Button
-                          className="justify-start border-0 bg-gradient-electric text-electric-foreground hover:shadow-electric"
-                          onClick={() => {
-                            setAuthMode("register");
-                            setAuthOpen(true);
-                          }}
-                        >
+                        <Button className="border-0 bg-gradient-electric text-electric-foreground hover:shadow-electric" onClick={() => {
+                          setAuthMode("register");
+                          setAuthOpen(true);
+                        }}>
                           Register
                         </Button>
                       </SheetClose>
-
-                      <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
-                        <span className="text-sm">Theme</span>
-                        <ThemeToggle />
-                      </div>
                     </div>
                   )}
                 </div>
@@ -351,7 +292,7 @@ export default function Navbar() {
           </div>
         </div>
 
-        {/* Auth modal (controlled) */}
+        {/* Auth modal */}
         <AuthModal
           isOpen={authOpen}
           onClose={setAuthOpen}

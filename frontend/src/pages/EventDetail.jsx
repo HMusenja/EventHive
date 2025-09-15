@@ -1,6 +1,7 @@
-// src/pages/EventDetail.jsx
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
+
 import { getEvent } from "@/api/eventsApi";
 import { getMyEventMemberCached } from "@/api/onboardingApi";
 import {
@@ -74,7 +75,6 @@ export default function EventDetail() {
   }, [event?._id]);
 
   // Attendee count
-  // Attendee count
   useEffect(() => {
     if (!event) return;
     let alive = true;
@@ -118,6 +118,7 @@ export default function EventDetail() {
         memberCount={memberCount}
         attendeeCount={attendeeCount}
         checkedInCount={checkedInCount}
+        chatUrl={`/events/${event._id}/chat`}
       />
       <AgendaSection
         agenda={event.agenda}

@@ -1,6 +1,7 @@
 // src/api/organizerApi.js
 import axios from "axios";
 
+
 // Fetch events the current user organizes
 export async function getMyOrganizing() {
   try {
@@ -16,8 +17,10 @@ export async function getMyOrganizing() {
   }
 }
 
+
 // Example: fetch a single event (by id or slug)
 export async function getEvent(idOrSlug) {
+
   try {
     console.log("[getEvent] → calling", `/api/events/${idOrSlug}`);
     const { data } = await axios.get(`/api/events/${idOrSlug}`);
@@ -29,10 +32,12 @@ export async function getEvent(idOrSlug) {
     console.error("[getEvent] error →", msg);
     throw new Error(msg);
   }
+
 }
 
 // Example: fetch all events
 export async function getAllEvents() {
+
   try {
     console.log("[getAllEvents] → calling /api/events");
     const { data } = await axios.get("/api/events");
@@ -57,4 +62,5 @@ export async function updateOrganizerProfile(eventId, profile) {
     console.error("[updateOrganizerProfile] error →", msg);
     throw new Error(msg);
   }
+
 }
