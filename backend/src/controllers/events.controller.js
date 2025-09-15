@@ -1,4 +1,3 @@
-// backend/src/controllers/events.controller.js
 import Event from "../models/Event.js";
 import EventMember from "../models/EventMember.js";
 

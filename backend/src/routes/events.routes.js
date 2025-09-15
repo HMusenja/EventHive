@@ -1,4 +1,3 @@
-// backend/src/routes/eventRoutes.js
 import { Router } from "express";
 import {
   getEvent,
@@ -26,7 +25,7 @@ router.get("/me/attending", checkToken, getMyAttending);
 router.get(
   "/:eventId/dashboard/stats",
   checkToken,
-  requireEventRole(["organizer","staff"]),
+  requireEventRole(["organizer", "staff"]),
   getEventDashboardStats
 );
 
