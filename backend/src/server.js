@@ -28,6 +28,7 @@ import eventMatchRoutes from "./routes/eventMatch.routes.js";
 import meetingRoutes from "./routes/meetings.routes.js";
 //import messageRoutes from "./routes/messages.routes.js";
 import chatRoutes from "./routes/chat.routes.js";
+import feedbackRoutes from "./routes/feedback.routes.js";
 
 dotenv.config();
 await connectDB();
@@ -57,6 +58,7 @@ app.use("/api", eventMatchRoutes);
 app.use("/api/meetings", meetingRoutes);
 //app.use("/api", messageRoutes);
 app.use("/api", chatRoutes);
+app.use("/api/feedback", feedbackRoutes);
 
 // Errors
 app.use(routeNotFound);
