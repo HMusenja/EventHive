@@ -30,8 +30,7 @@ const formatTime = (d) => {
 };
 
 const isSameDay = (a, b) => {
-    const da = new Date(a),
-        db = new Date(b);
+    const da = new Date(a), db = new Date(b);
     return (
         da.getFullYear() === db.getFullYear() &&
         da.getMonth() === db.getMonth() &&
@@ -39,7 +38,8 @@ const isSameDay = (a, b) => {
     );
 };
 
-/** Tiny emoji palette */
+
+/** Tiny emoji palette (same as event chat) */
 const COMMON_EMOJIS =
     "😀 😁 😂 🤣 😊 🙂 🙃 😉 😍 😘 🤗 🤩 🤔 😏 😴 😮 😱 😅 😆 😇 🤤 😋 😎 🥳 🤠 😤 😡 😭 😢 🤯 🤬 🙏 🤝 👍 👎 👏 ✨ 🎉 💯 🔥 💡 🧠 🫶 ❤️ 🩷 🧡 💛 💚 💙 💜 🤍 🤎 🖤 ☕ 🍀 🌟 🌈 🌊 🌞 🌙 💫 📎 📌 📨".split(
         " "
@@ -47,6 +47,7 @@ const COMMON_EMOJIS =
 
 /** --------- main --------- */
 export default function GlobalChat() {
+    // Support /chat/global and /chat/event/:eventId (optional)
     const { eventId } = useParams();
     const navigate = useNavigate();
     const { user } = useAuth();
@@ -56,7 +57,7 @@ export default function GlobalChat() {
         eventId ? { kind: "event", id: String(eventId) } : { kind: "global", id: "global" }
     );
 
-    // events list
+    // events list for the sidebar
     const [events, setEvents] = useState([]);
     const [eventsLoading, setEventsLoading] = useState(true);
     const [eventsQuery, setEventsQuery] = useState("");
@@ -72,6 +73,7 @@ export default function GlobalChat() {
         [user?.fullName, user?.username]
     );
 
+    // dedupe helpers
     const msgIndex = useRef(new Map());
     const pendingByText = useRef(new Map());
 
@@ -93,12 +95,14 @@ export default function GlobalChat() {
         });
     };
 
-    /** ----- fetch events ----- */
+    /** ----- fetch events for the sidebar ----- */
     useEffect(() => {
         let alive = true;
         (async () => {
             try {
                 setEventsLoading(true);
+
+                // Adjust params to match your events listing controller
                 const { data } = await api.get("events", {
                     params: { limit: 25, sort: "startAt:asc" },
                 });
@@ -111,12 +115,10 @@ export default function GlobalChat() {
                 if (alive) setEventsLoading(false);
             }
         })();
-        return () => {
-            alive = false;
-        };
+        return () => { alive = false; };
     }, []);
 
-    /** ----- background cover ----- */
+    /** ----- figure out bg cover from selected room ----- */
     const activeEvent = useMemo(() => {
         if (activeRoom.kind !== "event") return null;
         return events.find((e) => String(e._id) === String(activeRoom.id)) || null;
@@ -125,10 +127,18 @@ export default function GlobalChat() {
     const heroImage = useMemo(() => {
         const e = activeEvent;
         if (!e) return null;
-        return e.coverImage || e.cover?.url || e.bannerUrl || e.images?.banner || e.heroImage || null;
+
+        return (
+            e.coverImage ||
+            e.cover?.url ||
+            e.bannerUrl ||
+            e.images?.banner ||
+            e.heroImage ||
+            null
+        );
     }, [activeEvent]);
 
-    /** ----- load history ----- */
+    /** ----- load history for current room ----- */
     const roomKey = activeRoom.kind === "global" ? "global" : String(activeRoom.id);
 
     useEffect(() => {
@@ -166,11 +176,16 @@ export default function GlobalChat() {
 
         connectSocket();
 
-        const rk = roomKey;
+        const rk = roomKey; // capture
         socket.emit("join_room", rk);
 
         const onMsg = (payload) => {
-            if (!payload || payload.room !== rk) return;
+            // payload: { _id, text, sender, createdAt, room }
+            if (!payload || payload.room !== rk) {
+                // (optional) could increment unread for other rooms here
+                return;
+            }
+
             const senderLabel = labelFor(payload.sender);
             if (senderLabel === myLabel && pendingByText.current.has(payload.text)) {
                 const { tmpId, ts } = pendingByText.current.get(payload.text) || {};
@@ -190,6 +205,7 @@ export default function GlobalChat() {
             socket.off("chat_message", onMsg);
             socket.emit("leave_room", rk);
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [roomKey, user?._id, myLabel]);
 
     /** ----- auto-scroll ----- */
@@ -200,7 +216,7 @@ export default function GlobalChat() {
         el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
     }, [messages.length]);
 
-    /** ----- emoji helper ----- */
+    /** ----- emoji / textarea helpers ----- */
     const textareaRef = useRef(null);
     const insertEmoji = (emoji) => {
         const el = textareaRef.current;
@@ -219,7 +235,7 @@ export default function GlobalChat() {
         }, 0);
     };
 
-    /** ----- group rows ----- */
+    /** ----- group rows by day (same pattern) ----- */
     const rows = useMemo(() => {
         const out = [];
         let last = null;
@@ -275,17 +291,26 @@ export default function GlobalChat() {
         const q = eventsQuery.trim().toLowerCase();
         if (!q) return events;
         return events.filter((e) =>
-            [e.title, e.subtitle, e.slug].filter(Boolean).some((t) => String(t).toLowerCase().includes(q))
+            [e.title, e.subtitle, e.slug]
+                .filter(Boolean)
+                .some((t) => String(t).toLowerCase().includes(q))
         );
     }, [events, eventsQuery]);
 
-    const headerTitle = activeRoom.kind === "global" ? "Global Chat" : activeEvent?.title || "Event Chat";
+    /** ----- header texts ----- */
+    const headerTitle =
+        activeRoom.kind === "global"
+            ? "Global Chat"
+            : activeEvent?.title || "Event Chat";
+
     const headerSubtitle =
-        activeRoom.kind === "global" ? "Everyone in one place ✨" : activeEvent?.subtitle || activeEvent?.slug || "";
+        activeRoom.kind === "global"
+            ? "Everyone in one place ✨"
+            : activeEvent?.subtitle || activeEvent?.slug || "";
 
     return (
-        <div className="relative min-h-screen isolate">
-            {/* background */}
+        <div className="relative min-h-screen">
+            {/* background: selected room cover or gradient */}
             {heroImage ? (
                 <div className="pointer-events-none absolute inset-0 -z-10">
                     <img
@@ -295,16 +320,17 @@ export default function GlobalChat() {
                         loading="lazy"
                         decoding="async"
                     />
+
+                    {/* readable overlay */}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
                 </div>
             ) : (
                 <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-t from-black/80 via-black/10 to-white" />
             )}
 
-            {/* layout */}
             <div className="mx-auto max-w-7xl px-3 md:px-6 py-6 grid grid-cols-1 md:grid-cols-[280px_minmax(0,1fr)] gap-4">
                 {/* Sidebar */}
-                <aside className="rounded-2xl border bg-background/70 backdrop-blur p-3 md:p-4 space-y-4">
+                <aside className="rounded-2xl border bg-background/70 backdrop-blur supports-[backdrop-filter]:bg-background/50 p-3 md:p-4 space-y-4">
                     <div className="flex items-center gap-2">
                         <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-white shadow">
                             <MessageSquareText className="h-4 w-4" />
@@ -316,8 +342,9 @@ export default function GlobalChat() {
                     </div>
 
                     <button
-                        className={`w-full text-left rounded-xl px-3 py-2 border transition flex items-center gap-2 ${activeRoom.kind === "global" ? "bg-muted border-border" : "hover:bg-muted"
-                            }`}
+                        className={`w-full text-left rounded-xl px-3 py-2 border transition flex items-center gap-2
+              ${activeRoom.kind === "global" ? "bg-muted border-border" : "hover:bg-muted"}
+            `}
                         onClick={() => {
                             setActiveRoom({ kind: "global", id: "global" });
                             navigate("/chat/global", { replace: false });
@@ -340,7 +367,8 @@ export default function GlobalChat() {
                     <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
                         {eventsLoading && (
                             <div className="flex items-center justify-center py-6 text-muted-foreground">
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading events…
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Loading events…
                             </div>
                         )}
                         {!eventsLoading && filteredEvents.length === 0 && (
@@ -348,12 +376,14 @@ export default function GlobalChat() {
                         )}
                         {filteredEvents.map((e) => {
                             const active = activeRoom.kind === "event" && String(activeRoom.id) === String(e._id);
-                            const thumb = e.coverImage || e.cover?.url || e.bannerUrl || e.images?.banner || e.heroImage;
+                            const thumb =
+                                e.coverImage || e.cover?.url || e.bannerUrl || e.images?.banner || e.heroImage;
                             return (
                                 <button
                                     key={e._id}
-                                    className={`w-full text-left rounded-xl px-2.5 py-2 border transition flex items-center gap-3 ${active ? "bg-muted border-border" : "hover:bg-muted"
-                                        }`}
+                                    className={`w-full text-left rounded-xl px-2.5 py-2 border transition flex items-center gap-3
+                    ${active ? "bg-muted border-border" : "hover:bg-muted"}
+                  `}
                                     onClick={() => {
                                         setActiveRoom({ kind: "event", id: String(e._id) });
                                         navigate(`/chat/event/${e._id}`, { replace: false });
@@ -372,7 +402,9 @@ export default function GlobalChat() {
                                     <div className="min-w-0">
                                         <div className="truncate text-sm font-medium">{e.title}</div>
                                         {!!e.subtitle && (
-                                            <div className="truncate text-[11px] text-muted-foreground">{e.subtitle}</div>
+                                            <div className="truncate text-[11px] text-muted-foreground">
+                                                {e.subtitle}
+                                            </div>
                                         )}
                                     </div>
                                 </button>
@@ -382,15 +414,20 @@ export default function GlobalChat() {
                 </aside>
 
                 {/* Chat panel */}
-                <section className="rounded-2xl border bg-background/70 backdrop-blur shadow-sm">
+                <section className="rounded-2xl border bg-background/70 backdrop-blur supports-[backdrop-filter]:bg-background/50 shadow-sm">
+                
                     {/* Header */}
                     <div className="flex items-center gap-3 border-b p-3 md:p-4">
                         <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-white shadow-md">
                             <MessageSquareText className="h-5 w-5" />
                         </div>
                         <div>
-                            <h1 className="text-xl md:text-2xl font-bold tracking-tight">{headerTitle}</h1>
-                            {!!headerSubtitle && <p className="text-xs text-muted-foreground">{headerSubtitle}</p>}
+                            <h1 className="text-xl md:text-2xl font-bold tracking-tight">
+                                {headerTitle}
+                            </h1>
+                            {!!headerSubtitle && (
+                                <p className="text-xs text-muted-foreground">{headerSubtitle}</p>
+                            )}
                         </div>
                     </div>
 
@@ -406,7 +443,9 @@ export default function GlobalChat() {
                         )}
 
                         {!loadingHistory && rows.length === 0 && (
-                            <div className="text-center text-muted-foreground py-10">Be the first to say hello ✨</div>
+                            <div className="text-center text-muted-foreground py-10">
+                                Be the first to say hello ✨
+                            </div>
                         )}
 
                         {rows.map((row) =>
@@ -417,13 +456,20 @@ export default function GlobalChat() {
                                     </div>
                                 </div>
                             ) : (
-                                <MessageBubble key={row._id} msg={row} isMe={labelFor(row.sender) === myLabel} />
+                                <MessageBubble
+                                    key={row._id}
+                                    msg={row}
+                                    isMe={labelFor(row.sender) === myLabel}
+                                />
                             )
                         )}
                     </div>
 
                     {/* Composer */}
-                    <form onSubmit={sendMessage} className="relative border-t p-3 md:p-4">
+                    <form
+                        onSubmit={sendMessage}
+                        className="relative border-t p-3 md:p-4"
+                    >
                         <div className="flex items-end gap-2">
                             <textarea
                                 ref={textareaRef}
@@ -434,15 +480,14 @@ export default function GlobalChat() {
                                     e.currentTarget.style.height = "auto";
                                     e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
                                 }}
-                                placeholder={`Message ${activeRoom.kind === "global" ? "Global chat" : "this event"
-                                    }…`}
+                                placeholder={`Message ${activeRoom.kind === "global" ? "Global chat" : "this event"}…`}
+
                                 className="min-h-10 max-h-28 flex-1 resize-none rounded-xl border bg-background px-3 py-2 leading-6 outline-none ring-0 focus:border-primary/40"
                             />
 
                             <button
                                 type="button"
-                                className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border bg-background transition ${showEmoji ? "bg-muted" : "hover:bg-muted"
-                                    }`}
+                                className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border bg-background transition ${showEmoji ? "bg-muted" : "hover:bg-muted"}`}
                                 title="Emoji"
                                 onClick={() => setShowEmoji((v) => !v)}
                             >
