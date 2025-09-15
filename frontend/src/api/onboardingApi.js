@@ -49,6 +49,6 @@ export async function suggestTags(eventId, q) {
 }
 
 export async function putAttendeeProfile(eventId, payload) {
-  const { data } = await axios.put(`/events/${eventId}/attendee/profile`, payload);
+  const { data } = await axios.put(`/api/events/${eventId}/attendee/profile`, payload);
   return data;
 }

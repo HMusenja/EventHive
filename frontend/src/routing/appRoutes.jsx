@@ -5,6 +5,14 @@ import Register from "@/pages/Register";
 import EventDetail from "@/pages/EventDetail";
 import EventList from "@/pages/EventList";
 
+import Dashboard from "@/pages/dashboard/Dashboard";
+import OrganizerLayout from "@/pages/OrganizerLayout";
+import Sales from "@/pages/dashboard/organizer/Sales";
+import Events from "@/pages/dashboard/organizer/Events";
+import Exports from "@/pages/dashboard/organizer/Exports";
+import Analytics from "@/pages/dashboard/organizer/Analytics";
+
+
 
 import RequestMeeting from "@/pages/RequestMeeting";
 import MyMeetings from "@/pages/MyMeetings";
@@ -40,8 +48,9 @@ export default function AppRoutes() {
         <Route path="/events" element={<EventList />} />
 
         
-        <Route path="/events/:id/tickets" element={<Tickets />} />
+        {/* <Route path="/events/:id/tickets" element={<Tickets />} /> */}
         <Route path="/tickets" element={<Tickets />} />
+        <Route path="/tickets/success" element={<TicketSuccess />} />
         <Route path="/events/:eventId/network/request/:userId" element={<RequestMeeting />} />
         <Route path="/events/:eventId/meetings" element={<MyMeetings />} />
 
@@ -55,16 +64,26 @@ export default function AppRoutes() {
           </ProtectedRoute>
         }
       />
+
+      
     
 
 
         {/* Event detail by slug (preferred) */}
         <Route path="/events/:slug" element={<EventDetail />} />
 
+         <Route path="/dashboard/organizer" element={<OrganizerLayout />}>
+            <Route index element={<Dashboard />} />
+            <Route path="events" element={<Events />} />
+            <Route path="sales" element={<Sales />} />
+            <Route path="analytics" element={<Analytics />} />
+            <Route path="exports" element={<Exports />} /> 
+          </Route>
+
         {/* Onboarding + Tickets by slug */}
         <Route path="/events/:slug/onboarding" element={<EventOnboardingPage />} />
         <Route path="/events/:slug/tickets" element={<Tickets />} />
-          {/*<Route path="/events/id/:id/tickets" element={<Tickets />} /> */}
+          <Route path="/events/id/:id/tickets" element={<Tickets />} />
     
         <Route path="/pay/dummy-checkout" element={<DummyCheckout />} />
         <Route path="/events/:eventId/checkin" element={<CheckinScanner />} />
@@ -76,7 +95,9 @@ export default function AppRoutes() {
 
         {/* Legacy event detail by id */}
         <Route path="/events/id/:id" element={<EventDetail />} />
+
       </Route>
+
 
       {/* Account routes (no AppShell, use AccountLayout instead) */}
       <Route path="/account" element={<AccountLayout />}>

@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import SmartGetTicketButton from "./SmartGetTicketButton";
-import { Link } from "react-router-dom";
+
 
 export default function EventHero({ event, membership, profileUrl, attendeeCount,  memberCount, checkedInCount }) {
   const start = new Date(event.startAt);

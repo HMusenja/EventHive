@@ -34,8 +34,8 @@ POST {{baseUrl}}/api/users/login
 Content-Type: application/json
 
 {
-  "email": "alice@mail.com",
-  "password": "123456"
+  "email": "tester@mail.com",
+  "password": "1234"
 }
 # → set @authA
 
@@ -73,8 +73,8 @@ Authorization: {{authA}}
 Content-Type: application/json
 
 {
-  "slug": "eventhive-2026",
-  "title": "eventHive 2026",
+  "slug": "HamburgTech-2027",
+  "title": "HamburgTech 2027",
   "subtitle": "Modern event stack",
   "description": "Hands-on sessions, networking, and demos.",
   "coverImage": "",
@@ -92,7 +92,7 @@ Content-Type: application/json
 # Save: @eventId = <_id>
 
 ### Get Event by slug (sanity)
-GET {{baseUrl}}/api/events/eventhive-2026
+GET {{baseUrl}}/api/events/BigApple-2027
 
 
 ############################
@@ -103,7 +103,7 @@ GET {{baseUrl}}/api/events/eventhive-2026
 GET {{baseUrl}}/api/tickets?eventId={{eventId}}
 
 ### Create a PAID ticket
-POST {{baseUrl}}/api/tickets
+POST {{baseUrl}}/api/tickets/events/68c410d3209c849a19477914
 Authorization: {{authA}}
 Content-Type: application/json
 
@@ -121,13 +121,13 @@ Content-Type: application/json
 # Save: @ticketId = <_id>
 
 ### Create a FREE ticket (for fast tests)
-POST {{baseUrl}}/api/tickets
+POST {{baseUrl}}/api/tickets/events/68c410d3209c849a19477914
 Authorization: {{authA}}
 Content-Type: application/json
 
 {
   "eventId": "{{eventId}}",
-  "name": "Community Pass",
+  "name": "Free Bird",
   "description": "Free entry",
   "currency": "eur",
   "priceCents": 0,

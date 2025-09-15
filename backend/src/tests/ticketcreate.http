@@ -1,0 +1,88 @@
+
+### Login
+POST http://localhost:5000/api/users/login
+Content-Type: application/json
+
+{
+  "email": "tester@mail.com",
+  "password": "1234"
+}
+
+
+### 1) Create a new event
+POST http://localhost:5000/api/events
+Content-Type: application/json
+Authorization: Bearer token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2OGM2YmEzMDQxMWZiNWM0NTI5MDJmOWMiLCJpYXQiOjE3NTc4NTkyOTksImV4cCI6MTc1ODQ2NDA5OX0.EEp_UVdsiAkj64RjRpPDy2WEPcGFGxJ_lO4ty34srsI; Max-Age=86400; Path=/; Expires=Mon, 15 Sep 2025 14:14:59 GMT; HttpOnly; SameSite=Strict
+
+{
+  "slug": "Test-2025-v7",
+  "title": "Test 2025",
+  "subtitle": "Build, ship, connect",
+  "description": "An amazing event",
+  "coverImage": "https://picsum.photos/1600/900?random=1",
+  "onboardingEnabled": true,
+
+  "startAt": "2025-12-03T09:00:00.000Z",
+  "endAt": "2025-12-03T17:00:00.000Z",
+  "timezone": "Europe/Berlin",
+
+  "venue": {
+    "name": "City Conference Center",
+    "address": "Main Street 123",
+    "city": "Berlin",
+    "country": "DE"
+  },
+
+  "speakers": [
+    {
+      "name": "Alice Example",
+      "title": "CTO",
+      "company": "TechCorp",
+      "bio": "Alice has built 10 startups.",
+      "avatarUrl": "https://placehold.co/200x200",
+      "socials": {
+        "twitter": "alice_dev",
+        "linkedin": "alice-linkedin"
+      }
+    }
+  ],
+
+  "agenda": [
+    {
+      "title": "Welcome & Keynote",
+      "description": "Kickoff session",
+      "startAt": "2025-12-03T09:00:00.000Z",
+      "endAt": "2025-12-03T09:30:00.000Z",
+      "room": "Main Hall",
+      "track": "General",
+      "speakerNames": ["Alice Example"]
+    }
+  ],
+
+  "visibility": "public",
+  "capacity": 1000
+}
+
+### 2) List all events
+GET http://localhost:5000/api/events
+
+### 3) Create a ticket for this event
+# Replace {{EVENT_ID}} with the _id returned in step 1
+POST http://localhost:5000/api/tickets/events/68c2a7b0a40b1dbe6ff81b8c 
+Content-Type: application/json
+Cookie: token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2OGM2YmEzMDQxMWZiNWM0NTI5MDJmOWMiLCJpYXQiOjE3NTc4NTkyOTksImV4cCI6MTc1ODQ2NDA5OX0.EEp_UVdsiAkj64RjRpPDy2WEPcGFGxJ_lO4ty34srsI; Max-Age=86400; Path=/; Expires=Mon, 15 Sep 2025 14:14:59 GMT; HttpOnly; SameSite=Strict
+
+{
+  "eventId": "68c2a7b0a40b1dbe6ff81b8c",
+  "name": "Standard",
+  "description": "Standard ticket",
+  "currency": "eur",
+  "priceCents": 1999,
+  "quantityTotal": 500,
+  "isActive": true,
+  "salesStartAt": "2025-09-01T00:00:00.000Z",
+  "salesEndAt": "2025-12-01T23:59:59.000Z"
+}
+
+### 4) List tickets for the event
+GET http://localhost:5000/api/tickets/event/68c2a7b0a40b1dbe6ff81b8c

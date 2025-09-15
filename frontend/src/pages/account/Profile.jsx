@@ -11,10 +11,10 @@ export default function Profile() {
 
   const Pane = useMemo(() => {
     if (role === "admin") return AdminPane;
-    if (role === "organizer") return OrganizerPane;
+  if (role === "organizer" || user?.isOrganizer)  return OrganizerPane;
     // default to Attendee for "user", missing, or unknown roles
     return AttendeePane;
-  }, [role]);
+  }, [role, user?.isOrganizer]);
 
   return (
     <Suspense fallback={<div className="text-muted-foreground">Loading profile…</div>}>

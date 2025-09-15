@@ -1,5 +1,6 @@
 import Ticket from "../models/Ticket.js";
 
+
 export const listTicketsForEvent = async (req, res, next) => {
   try {
     const eventId = req.params.eventId || req.query.eventId; // 👈 support both
@@ -23,10 +24,30 @@ export const listTicketsForEvent = async (req, res, next) => {
 
 // Optional now; handy for organizer dashboard:
 export const createTicket = async (req, res, next) => {
-    try {
-        const doc = await Ticket.create(req.body);
-        res.status(201).json({ ticket: doc });
-    } catch (e) { next(e); }
+  try {
+    console.log("📝 createTicket called");
+    console.log("req.params:", req.params);
+    console.log("req.body:", req.body);
+    console.log("req.user:", req.user);
+
+    const { eventId } = req.params;
+
+    if (!eventId) {
+      console.log("❌ eventId missing in params");
+      return res.status(400).json({ ok: false, message: "eventId is required" });
+    }
+
+    const ticketData = { ...req.body, eventId };
+    console.log("Ticket data to create:", ticketData);
+
+    const doc = await Ticket.create(ticketData);
+    console.log("Ticket created:", doc);
+
+    res.status(201).json({ ticket: doc });
+  } catch (e) {
+    console.error("CreateTicket error:", e);
+    next(e);
+  }
 };
 
 export const updateTicket = async (req, res, next) => {

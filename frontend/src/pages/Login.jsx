@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useLocation, useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -7,67 +7,78 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, Mail, Lock, Cloud } from "lucide-react";
-
+import { getDashboardPath } from "@/utils/dashboardPath";
 import authBg from "@/assets/images/hero-background.jpg";
 
 export default function Login() {
-  const { login, loading, error, user } = useAuth();
+  const { login, loading, error } = useAuth();
   const { toast } = useToast();
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Prefill + redirect target
   const search = new URLSearchParams(location.search);
-  const next = search.get("next") || "/account";
+  const nextParam = search.get("next") || null;
   const prefill = search.get("prefill") || location.state?.identifier || "";
 
   const [identifier, setIdentifier] = useState(prefill);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
-  // If already logged in, bounce to next
-  useEffect(() => {
-    if (user) navigate(next, { replace: true });
-  }, [user, next, navigate]);
-
   const formValid = useMemo(
     () => identifier.trim().length > 0 && password.length >= 4,
     [identifier, password]
   );
 
+  const idError = identifier && identifier.trim().length === 0;
+  const pwError = password && password.length < 4;
+
   async function onSubmit(e) {
     e.preventDefault();
     if (!formValid) return;
 
-    const res = await login({ identifier: identifier.trim(), password });
-    if (res.ok) {
-      toast({ title: "Welcome back!", description: res.message || "Login successful." });
-      navigate(next, { replace: true });
-    } else {
+    try {
+      console.debug("[Login] Logging in with:", identifier);
+      const res = await login({ identifier: identifier.trim(), password });
+      console.debug("[Login] login returned:", res);
+
+      if (res.ok) {
+        toast({
+          title: "Welcome back!",
+          description: res.message || "Login successful.",
+        });
+
+        // Redirect immediately using the returned user
+        const target = nextParam
+          ? nextParam
+          : res.user?.isOrganizer
+            ? "/dashboard/organizer"
+            : getDashboardPath(res.user);
+
+        console.debug("[Login] navigating to target:", target);
+        navigate(target, { replace: true });
+      }
+    } catch (err) {
       toast({
         title: "Login failed",
-        description: res?.error?.message || "Invalid credentials.",
+        description: err?.response?.data?.message || err.message || "Invalid credentials.",
         variant: "destructive",
       });
     }
   }
 
-  // Inline field validation helpers
-  const idError = identifier && identifier.trim().length === 0;
-  const pwError = password && password.length < 4;
-
   return (
     <section className="auth-form relative min-h-screen overflow-hidden">
-          {/* Background (gradient + optional image overlay) */}
-          <div className="absolute inset-0 bg-gradient-hero" />
+      <div className="absolute inset-0 bg-gradient-hero" />
       <div
         className="absolute inset-0 opacity-40"
-        style={authBg ? { backgroundImage: `url(${authBg})`,backgroundSize: "cover",
-          backgroundPosition: "center" } : undefined}
+        style={
+          authBg
+            ? { backgroundImage: `url(${authBg})`, backgroundSize: "cover", backgroundPosition: "center" }
+            : undefined
+        }
       />
-     <div className="pointer-events-none absolute inset-0 [background:radial-gradient(60%_60%_at_50%_10%,hsl(0_0%_100%/.08),transparent)]" />
+      <div className="pointer-events-none absolute inset-0 [background:radial-gradient(60%_60%_at_50%_10%,hsl(0_0%_100%/.08),transparent)]" />
 
-      {/* Content */}
       <div className="relative z-10 flex min-h-screen items-center justify-center p-4">
         <Card className="w-full max-w-md glass-effect border border-white/20">
           <CardHeader className="text-center space-y-2">
@@ -95,9 +106,7 @@ export default function Login() {
                     className={`pl-10 glass-input placeholder:text-white/70 ${idError ? "border-destructive" : ""}`}
                   />
                 </div>
-                {idError && (
-                  <p className="text-xs text-destructive mt-1">Please enter your email or username.</p>
-                )}
+                {idError && <p className="text-xs text-destructive mt-1">Please enter your email or username.</p>}
               </div>
 
               <div className="space-y-2">
@@ -121,21 +130,13 @@ export default function Login() {
                     onClick={() => setShowPassword((s) => !s)}
                     aria-label={showPassword ? "Hide password" : "Show password"}
                   >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4 text-muted-foreground" />
-                    ) : (
-                      <Eye className="h-4 w-4 text-muted-foreground" />
-                    )}
+                    {showPassword ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
                   </Button>
                 </div>
-                {pwError && (
-                  <p className="text-xs text-destructive mt-1">Password must be at least 4 characters.</p>
-                )}
+                {pwError && <p className="text-xs text-destructive mt-1">Password must be at least 4 characters.</p>}
               </div>
 
-              {error?.message ? (
-                <p className="text-sm text-destructive">{error.message}</p>
-              ) : null}
+              {error?.message && <p className="text-sm text-destructive">{error.message}</p>}
 
               <Button type="submit" className="w-full" disabled={!formValid || loading}>
                 {loading ? "Signing in…" : "Sign in"}
@@ -143,7 +144,7 @@ export default function Login() {
 
               <p className="text-sm text-muted-foreground text-center">
                 Don’t have an account?{" "}
-                <Link className="underline" to={`/register?next=${encodeURIComponent(next)}`}>
+                <Link className="underline" to={`/register?next=${encodeURIComponent(nextParam || "/account")}`}>
                   Create one
                 </Link>
               </p>
@@ -154,3 +155,4 @@ export default function Login() {
     </section>
   );
 }
+
