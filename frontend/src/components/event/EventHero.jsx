@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import SmartGetTicketButton from "./SmartGetTicketButton";
 
+
 export default function EventHero({ event, membership, profileUrl, attendeeCount, memberCount, checkedInCount, chatUrl }) {
   const start = new Date(event.startAt);
   const end = new Date(event.endAt);

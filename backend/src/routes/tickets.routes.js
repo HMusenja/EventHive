@@ -14,7 +14,8 @@ const router = express.Router();
 router.get("/event/:eventId", listTicketsForEvent);
 
 /** Organizer-only CRUD */
-router.post("/", checkToken, requireEventRole("organizer"), createTicket);
+router.post("/events/:eventId", checkToken, requireEventRole("organizer"), createTicket);
+
 router.put("/:id", checkToken, requireEventRole("organizer"), updateTicket);
 router.delete("/:id", checkToken, requireEventRole("organizer"), deleteTicket);
 

@@ -38,6 +38,7 @@ const isSameDay = (a, b) => {
     );
 };
 
+
 /** Tiny emoji palette (same as event chat) */
 const COMMON_EMOJIS =
     "😀 😁 😂 🤣 😊 🙂 🙃 😉 😍 😘 🤗 🤩 🤔 😏 😴 😮 😱 😅 😆 😇 🤤 😋 😎 🥳 🤠 😤 😡 😭 😢 🤯 🤬 🙏 🤝 👍 👎 👏 ✨ 🎉 💯 🔥 💡 🧠 🫶 ❤️ 🩷 🧡 💛 💚 💙 💜 🤍 🤎 🖤 ☕ 🍀 🌟 🌈 🌊 🌞 🌙 💫 📎 📌 📨".split(
@@ -100,6 +101,7 @@ export default function GlobalChat() {
         (async () => {
             try {
                 setEventsLoading(true);
+
                 // Adjust params to match your events listing controller
                 const { data } = await api.get("events", {
                     params: { limit: 25, sort: "startAt:asc" },
@@ -125,6 +127,7 @@ export default function GlobalChat() {
     const heroImage = useMemo(() => {
         const e = activeEvent;
         if (!e) return null;
+
         return (
             e.coverImage ||
             e.cover?.url ||
@@ -162,10 +165,12 @@ export default function GlobalChat() {
             }
         })();
 
-        return () => { alive = false; };
+        return () => {
+            alive = false;
+        };
     }, [roomKey, activeRoom.kind, activeRoom.id]);
 
-    /** ----- socket join/leave + listeners (unified 'chat_message') ----- */
+    /** ----- socket join/leave ----- */
     useEffect(() => {
         if (!user) return;
 
@@ -180,6 +185,7 @@ export default function GlobalChat() {
                 // (optional) could increment unread for other rooms here
                 return;
             }
+
             const senderLabel = labelFor(payload.sender);
             if (senderLabel === myLabel && pendingByText.current.has(payload.text)) {
                 const { tmpId, ts } = pendingByText.current.get(payload.text) || {};
@@ -314,8 +320,9 @@ export default function GlobalChat() {
                         loading="lazy"
                         decoding="async"
                     />
+
                     {/* readable overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-white" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
                 </div>
             ) : (
                 <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-t from-black/80 via-black/10 to-white" />
@@ -408,6 +415,7 @@ export default function GlobalChat() {
 
                 {/* Chat panel */}
                 <section className="rounded-2xl border bg-background/70 backdrop-blur supports-[backdrop-filter]:bg-background/50 shadow-sm">
+                
                     {/* Header */}
                     <div className="flex items-center gap-3 border-b p-3 md:p-4">
                         <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-white shadow-md">
@@ -430,8 +438,7 @@ export default function GlobalChat() {
                     >
                         {loadingHistory && (
                             <div className="flex items-center justify-center py-10 text-muted-foreground">
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Loading messages…
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading messages…
                             </div>
                         )}
 
@@ -474,6 +481,7 @@ export default function GlobalChat() {
                                     e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
                                 }}
                                 placeholder={`Message ${activeRoom.kind === "global" ? "Global chat" : "this event"}…`}
+
                                 className="min-h-10 max-h-28 flex-1 resize-none rounded-xl border bg-background px-3 py-2 leading-6 outline-none ring-0 focus:border-primary/40"
                             />
 

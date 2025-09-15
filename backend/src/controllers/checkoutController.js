@@ -14,6 +14,7 @@ function apiError(code, message, status = 400, extra = {}) {
   Object.assign(err, extra);
   return err;
 }
+
 async function safeEmail(orderId) {
   try {
     await emailTicketsForOrder(orderId);
@@ -55,12 +56,35 @@ async function findOrCreateGuestUser({ email, fullName }) {
 }
 
 /**
- * PUBLIC — Guest starts checkout (no auth)
- * Body: { eventId, ticketId, fullName, email, quantity }
- * - Free ticket  -> immediately creates Order (paid/fulfilled), Attendee, and ticket refs
- * - Paid ticket  -> creates Order (awaiting_payment) and returns dummy checkout URL
+ * Return a lightweight snapshot for the frontend to render (works for guests too).
+ * Includes basic order info and issued tickets if present.
  */
+async function orderSnapshot(orderId) {
+  const o = await Order.findById(orderId).lean();
+  if (!o) return null;
+  return {
+    success: true,
+    mode: o.status === "fulfilled" ? "fulfilled" : "awaiting_payment",
+    orderId: String(o._id),
+    eventId: o.eventId,
+    ticketId: o.ticketId,
+    tickets: (o.tickets || []).map(t => ({
+      ticketId: t.ticketId,
+      ref: t.ref,
+      status: t.status,
+    })),
+    status: o.status,
+    quantity: o.quantity,
+    amountTotal: o.amountTotal,
+    currency: o.currency,
+    createdAt: o.createdAt,
+  };
+}
 
+/**
+ * SIGNED user checkout (auth required)
+ * Body: { eventId, ticketId, quantity }
+ */
 export async function createCheckout(req, res, next) {
   try {
     const authUser = req.user;
@@ -101,7 +125,7 @@ export async function createCheckout(req, res, next) {
     const clientBase = process.env.CLIENT_URL || "http://localhost:5173";
 
     if (isFree) {
-      // Instantly fulfill
+      // Instantly fulfill for signed user
       const lines = Array.from({ length: qty }, () => ({
         ticketId: ticket._id,
         ref: generateTicketRef(),
@@ -119,20 +143,31 @@ export async function createCheckout(req, res, next) {
         tickets: lines,
       });
 
-      await Attendee.findOneAndUpdate(
-        { eventId, userId: authUser._id },
-        { $setOnInsert: { roles: ["attendee"], status: "approved" }, $inc: { quantity: qty } },
-        { upsert: true, new: true }
-      );
+      // Upsert attendee (group)
+      try {
+        await Attendee.findOneAndUpdate(
+          { eventId, userId: authUser._id },
+          { $setOnInsert: { roles: ["attendee"], status: "approved" }, $inc: { quantity: qty } },
+          { upsert: true, new: true }
+        );
+      } catch (e) {
+        // tolerate duplicate-key races
+        if (e?.code !== 11000) throw e;
+      }
 
-      await Ticket.updateOne({ _id: ticket._id }, { $inc: { quantitySold: qty } });
+      try {
+        await Ticket.updateOne({ _id: ticket._id }, { $inc: { quantitySold: qty } });
+      } catch (e) {
+        if (e?.code !== 11000) throw e;
+      }
 
       await safeEmail(order._id);
 
-      return res.status(200).json({ success: true, mode: "free", orderId: order._id });
+      const snap = await orderSnapshot(order._id);
+      return res.status(200).json(snap ?? { success: true, mode: "free", orderId: order._id });
     }
 
-    // Paid → create awaiting_payment and send to dummy checkout UI
+    // Paid → create awaiting_payment and return dummy checkout URL
     const order = await Order.create({
       eventId,
       userId: authUser._id,
@@ -151,6 +186,10 @@ export async function createCheckout(req, res, next) {
   }
 }
 
+/**
+ * PUBLIC — Guest starts checkout (no auth)
+ * Body: { eventId, ticketId, fullName, email, quantity }
+ */
 export async function createGuestCheckout(req, res, next) {
   try {
     const { eventId, ticketId, fullName, email, quantity } = req.body || {};
@@ -210,21 +249,30 @@ export async function createGuestCheckout(req, res, next) {
       });
 
       // Upsert attendee (group entry MVP)
-      await Attendee.findOneAndUpdate(
-        { eventId, userId: user._id },
-        {
-          $setOnInsert: { roles: ["attendee"], status: "approved" },
-          $inc: { quantity: qty },
-        },
-        { upsert: true, new: true }
-      );
+      try {
+        await Attendee.findOneAndUpdate(
+          { eventId, userId: user._id },
+          {
+            $setOnInsert: { roles: ["attendee"], status: "approved" },
+            $inc: { quantity: qty },
+          },
+          { upsert: true, new: true }
+        );
+      } catch (e) {
+        if (e?.code !== 11000) throw e;
+      }
 
       // Increase sold
-      await Ticket.updateOne({ _id: ticket._id }, { $inc: { quantitySold: qty } });
+      try {
+        await Ticket.updateOne({ _id: ticket._id }, { $inc: { quantitySold: qty } });
+      } catch (e) {
+        if (e?.code !== 11000) throw e;
+      }
 
-await safeEmail(order._id);
+      await safeEmail(order._id);
 
-      return res.status(200).json({
+      const snap = await orderSnapshot(order._id);
+      return res.status(200).json(snap ?? {
         success: true,
         mode: "free",
         orderId: order._id,
@@ -259,6 +307,9 @@ await safeEmail(order._id);
  * Body: { orderId }
  * - Marks order as paid/fulfilled
  * - Issues ticket refs, creates/updates Attendee, increments sold
+ *
+ * This endpoint is idempotent: calling it multiple times returns the same
+ * final snapshot and tolerates duplicate-key races.
  */
 export async function completeGuestDummyPayment(req, res, next) {
   try {
@@ -267,15 +318,17 @@ export async function completeGuestDummyPayment(req, res, next) {
 
     const order = await Order.findById(orderId);
     if (!order) throw apiError("NOT_FOUND", "Order not found", 404);
+
+    // If already processed, return snapshot (idempotent)
     if (!["awaiting_payment", "created"].includes(order.status)) {
-      // idempotent
-      return res.status(200).json({ success: true, message: `Order already ${order.status}.` });
+      const snap = await orderSnapshot(orderId);
+      return res.status(200).json(snap ?? { success: true, message: `Order already ${order.status}.` });
     }
 
     const ticket = await Ticket.findById(order.ticketId);
     if (!ticket) throw apiError("INVALID_TICKET", "Ticket not found", 404);
 
-    // Capacity re-check (for race-safety)
+    // Capacity re-check (race-safety)
     const remaining = calcAvailable(ticket);
     if (order.quantity > remaining) throw apiError("SOLD_OUT", `Only ${remaining} tickets remaining`);
 
@@ -290,29 +343,47 @@ export async function completeGuestDummyPayment(req, res, next) {
     order.status = "fulfilled"; // simulate paid + fulfilled
     await order.save();
 
-    // Upsert attendee (group quantity)
-    await Attendee.findOneAndUpdate(
-      { eventId: order.eventId, userId: order.userId },
-      {
-        $setOnInsert: { roles: ["attendee"], status: "approved" },
-        $inc: { quantity: order.quantity },
-      },
-      { upsert: true, new: true }
-    );
+    // Upsert attendee (group quantity) — tolerate duplicate-key races
+    try {
+      await Attendee.findOneAndUpdate(
+        { eventId: order.eventId, userId: order.userId },
+        {
+          $setOnInsert: { roles: ["attendee"], status: "approved" },
+          $inc: { quantity: order.quantity },
+        },
+        { upsert: true, new: true }
+      );
+    } catch (e) {
+      if (e?.code !== 11000) throw e;
+      // else: safe to ignore (concurrent request already created/updated attendee)
+    }
 
-    // Increment sold
-    await Ticket.updateOne({ _id: ticket._id }, { $inc: { quantitySold: order.quantity } });
+    // Increment sold — tolerate duplicate races
+    try {
+      await Ticket.updateOne({ _id: ticket._id }, { $inc: { quantitySold: order.quantity } });
+    } catch (e) {
+      if (e?.code !== 11000) throw e;
+    }
 
     await safeEmail(order._id);
 
-    return res.status(200).json({
+    const snap = await orderSnapshot(order._id);
+    return res.status(200).json(snap ?? {
       success: true,
       mode: "paid-dummy",
       orderId: order._id,
       message: "Payment simulated, tickets issued, attendee granted.",
     });
   } catch (err) {
+    // If a duplicate key error leaks here, read the snapshot and return success
+    if (err?.code === 11000 && req?.body?.orderId) {
+      try {
+        const snap = await orderSnapshot(req.body.orderId);
+        return res.status(200).json(snap ?? { success: true, already: true, orderId: req.body.orderId });
+      } catch (inner) {
+        // fallthrough to next(err)
+      }
+    }
     next(err);
   }
 }
-

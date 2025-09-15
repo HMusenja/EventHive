@@ -1,5 +1,6 @@
 // src/pages/CheckinScanner.jsx
-import React, { Suspense } from "react";
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useParams, useSearchParams } from "react-router-dom";
 
 // Robust lazy import that works whether the lib exports QrScanner, Scanner, or default
 const QrScanner = React.lazy(() =>
@@ -7,8 +8,7 @@ const QrScanner = React.lazy(() =>
     default: mod.QrScanner || mod.Scanner || mod.default,
   }))
 );
-import { useCallback, useMemo, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+
 import { scanCheckin } from "@/api/checkinApi";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,8 +32,8 @@ function parseQrPayload(text) {
     const kv = Object.fromEntries(
       String(text)
         .split(/[;,&\s]+/)
-        .map(s => s.split("=").map(x => x.trim()))
-        .filter(pair => pair.length === 2 && pair[0] && pair[1])
+        .map((s) => s.split("=").map((x) => x.trim()))
+        .filter((pair) => pair.length === 2 && pair[0] && pair[1])
     );
     if (kv.order || kv.orderId || kv.ORD || kv.o) {
       return {
@@ -67,9 +67,7 @@ function AttendeeCard({ data }) {
           {email && <div className="text-xs text-muted-foreground">{email}</div>}
         </div>
         <div className="ml-auto">
-          <Badge variant={data?.alreadyUsed ? "destructive" : "default"}>
-            {status}
-          </Badge>
+          <Badge variant={data?.alreadyUsed ? "destructive" : "default"}>{status}</Badge>
         </div>
       </CardHeader>
       {data?.ticketRef && (
@@ -83,69 +81,88 @@ function AttendeeCard({ data }) {
 }
 
 export default function CheckinScanner() {
-    const isBrowser = typeof window !== "undefined";
-    
   const { eventId } = useParams();
+  const [search] = useSearchParams();
+  const initialOrderId = search.get("orderId") || "";
+  const initialTicketRef = search.get("ticketRef") || "";
+
   const [cameraOn, setCameraOn] = useState(true);
-  const [lastScan, setLastScan] = useState(null);    // raw decoded string
-  const [orderId, setOrderId] = useState("");
-  const [ticketRef, setTicketRef] = useState("");
+  const [lastScan, setLastScan] = useState(null); // raw decoded string
+  const [orderId, setOrderId] = useState(initialOrderId);
+  const [ticketRef, setTicketRef] = useState(initialTicketRef);
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState(null);        // server response
+  const [result, setResult] = useState(null); // server response
   const [err, setErr] = useState(null);
   const debounceRef = useRef(0);
+  const autoSubmittedRef = useRef(false); // avoid double auto-submit
 
-  const canSubmit = useMemo(
-    () => !!eventId && !!ticketRef && !!orderId && !busy,
-    [eventId, ticketRef, orderId, busy]
+  const canSubmit = useMemo(() => !!eventId && !!ticketRef && !!orderId && !busy, [eventId, ticketRef, orderId, busy]);
+
+  const doSubmit = useCallback(
+    async (oId, tRef) => {
+      if (!eventId || !oId || !tRef) return;
+      setBusy(true);
+      setErr(null);
+      setResult(null);
+      try {
+        const data = await scanCheckin(eventId, { orderId: oId, ticketRef: tRef });
+        // augment for card display
+        setResult({ ...data, orderId: oId, ticketRef: tRef });
+        // freeze camera briefly so scanner doesn't immediately re-scan same code
+        setCameraOn(false);
+        setTimeout(() => setCameraOn(true), 1200);
+      } catch (e) {
+        setErr(e?.response?.data?.message || e?.message || "Check-in failed");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [eventId]
   );
 
-  const handleDecode = useCallback(async (texts) => {
-    // texts is an array of decoded strings (lib returns list)
-    const raw = Array.isArray(texts) ? texts[0] : texts;
-    if (!raw) return;
+  // Auto-submit when initial query params are present (only once)
+  useEffect(() => {
+    if (!initialOrderId || !initialTicketRef || !eventId) return;
+    // Avoid triggering multiple times due to re-renders
+    if (autoSubmittedRef.current) return;
+    autoSubmittedRef.current = true;
+    // small delay to let the UI mount
+    const t = setTimeout(() => {
+      doSubmit(initialOrderId, initialTicketRef);
+    }, 200);
+    return () => clearTimeout(t);
+  }, [initialOrderId, initialTicketRef, eventId, doSubmit]);
 
-    // simple debounce so we don't fire multiple times
-    const now = Date.now();
-    if (now - debounceRef.current < 1200) return;
-    debounceRef.current = now;
+  const handleDecode = useCallback(
+    async (texts) => {
+      // texts is an array of decoded strings (lib returns list)
+      const raw = Array.isArray(texts) ? texts[0] : texts;
+      if (!raw) return;
 
-    setLastScan(raw);
-    const parsed = parseQrPayload(raw);
-    if (parsed.orderId) setOrderId(String(parsed.orderId));
-    if (parsed.ticketRef) setTicketRef(String(parsed.ticketRef));
+      // simple debounce so we don't fire multiple times
+      const now = Date.now();
+      if (now - debounceRef.current < 1200) return;
+      debounceRef.current = now;
 
-    // Auto-submit if both present
-    if (parsed.orderId && parsed.ticketRef) {
-      await doSubmit(parsed.orderId, parsed.ticketRef);
-    }
-  }, []);
+      setLastScan(raw);
+      const parsed = parseQrPayload(raw);
+      if (parsed.orderId) setOrderId(String(parsed.orderId));
+      if (parsed.ticketRef) setTicketRef(String(parsed.ticketRef));
 
-  async function doSubmit(oId, tRef) {
-    if (!eventId) return;
-    setBusy(true);
-    setErr(null);
-    setResult(null);
-    try {
-      const data = await scanCheckin(eventId, { orderId: oId, ticketRef: tRef });
-      // augment for card display
-      setResult({ ...data, orderId: oId, ticketRef: tRef });
-      // freeze camera for a moment
-      setCameraOn(false);
-      setTimeout(() => setCameraOn(true), 1200);
-    } catch (e) {
-      setErr(e?.response?.data?.message || e?.message || "Check-in failed");
-    } finally {
-      setBusy(false);
-    }
-  }
+      // Auto-submit if both present
+      if (parsed.orderId && parsed.ticketRef) {
+        await doSubmit(parsed.orderId, parsed.ticketRef);
+      }
+    },
+    [doSubmit]
+  );
 
   return (
     <div className="container py-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Event Check-in</h1>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => setCameraOn(v => !v)}>
+          <Button variant="outline" onClick={() => setCameraOn((v) => !v)}>
             {cameraOn ? "Pause camera" : "Resume camera"}
           </Button>
         </div>
@@ -156,23 +173,27 @@ export default function CheckinScanner() {
         <div className="space-y-3">
           <div className="rounded-xl overflow-hidden border bg-black">
             {cameraOn ? (
-              <QrScanner
-                onDecode={handleDecode}
-                onError={(e) => setErr(e?.message || "Camera error")}
-                constraints={{ facingMode: "environment" }}
-                containerStyle={{ width: "100%", height: 360 }}
-                videoStyle={{ width: "100%", height: "100%", objectFit: "cover" }}
-              />
+              <Suspense fallback={<div className="h-[360px] grid place-items-center text-muted-foreground">Loading camera…</div>}>
+                <QrScanner
+                  onDecode={handleDecode}
+                  onError={(e) => setErr(e?.message || "Camera error")}
+                  constraints={{ facingMode: "environment" }}
+                  containerStyle={{ width: "100%", height: 360 }}
+                  videoStyle={{ width: "100%", height: "100%", objectFit: "cover" }}
+                />
+              </Suspense>
             ) : (
-              <div className="h-[360px] grid place-items-center text-muted-foreground">
-                Camera paused
-              </div>
+              <div className="h-[360px] grid place-items-center text-muted-foreground">Camera paused</div>
             )}
           </div>
 
           {lastScan && (
             <div className="text-xs text-muted-foreground">
-              Last scan: <code className="break-all">{String(lastScan).slice(0, 140)}{String(lastScan).length > 140 ? "…" : ""}</code>
+              Last scan:{" "}
+              <code className="break-all">
+                {String(lastScan).slice(0, 140)}
+                {String(lastScan).length > 140 ? "…" : ""}
+              </code>
             </div>
           )}
         </div>
@@ -202,14 +223,25 @@ export default function CheckinScanner() {
                   placeholder="e.g. 9JX3K2"
                 />
               </div>
+
               <div className="flex gap-2">
                 <Button disabled={!canSubmit} onClick={() => doSubmit(orderId, ticketRef)}>
                   {busy ? "Checking…" : "Check in"}
                 </Button>
-                <Button variant="ghost" onClick={() => { setResult(null); setErr(null); }}>
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setResult(null);
+                    setErr(null);
+                    setLastScan(null);
+                    // keep the inputs; if you want to clear inputs as well, uncomment:
+                    // setOrderId(""); setTicketRef("");
+                  }}
+                >
                   Clear
                 </Button>
               </div>
+
               {err && (
                 <Alert variant="destructive">
                   <AlertDescription>{err}</AlertDescription>
@@ -224,3 +256,4 @@ export default function CheckinScanner() {
     </div>
   );
 }
+
