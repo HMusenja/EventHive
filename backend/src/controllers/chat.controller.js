@@ -3,7 +3,9 @@ import createError from "http-errors";
 import Event from "../models/Event.js";
 import Message from "../models/Message.js";
 
-// Resolve :eventId that can be an ObjectId or a slug; throw 404 if not found
+const MAX_LEN = 2000;
+
+// -------- helpers --------
 async function resolveEventIdOrThrow(idOrSlug) {
     let evId = null;
 
@@ -19,22 +21,44 @@ async function resolveEventIdOrThrow(idOrSlug) {
     return evId;
 }
 
+const toSender = (u) =>
+    u
+        ? {
+            _id: String(u._id),
+            fullName: u.fullName || "",
+            username: u.username || "",
+        }
+        : null;
+
+const toWire = (room) => (m) => ({
+    _id: String(m._id),
+    text: m.text,
+    createdAt: m.createdAt,
+    room, // "global" or eventId string
+    sender:
+        m.sender && typeof m.sender === "object" && m.sender._id
+            ? toSender(m.sender)
+            : m.sender
+                ? { _id: String(m.sender) }
+                : null,
+});
+
+// -------- controllers --------
+
 /**
  * GET /api/events/:eventId/messages
- * Optional query:
+ * Query:
  *   - limit (default 200, max 500)
  *   - before (message _id for simple pagination)
  */
 export async function listEventMessages(req, res, next) {
     try {
-        const eventId = await resolveEventIdOrThrow(req.params.eventId);
+        const evId = await resolveEventIdOrThrow(req.params.eventId);
 
         const { before, limit = 200 } = req.query;
         const pageSize = Math.min(Math.max(parseInt(limit, 10) || 200, 1), 500);
 
-        let query = Message.find({ eventId });
-
-        // Simple "load older than" pagination
+        let query = Message.find({ eventId: evId });
         if (before && mongoose.isValidObjectId(before)) {
             query = query.where("_id").lt(before);
         }
@@ -45,20 +69,7 @@ export async function listEventMessages(req, res, next) {
             .populate("sender", "fullName username")
             .lean();
 
-        const data = docs.map((m) => ({
-            _id: String(m._id),
-            text: m.text,
-            sender: m.sender
-                ? {
-                    _id: String(m.sender._id),
-                    fullName: m.sender.fullName || "",
-                    username: m.sender.username || "",
-                }
-                : null,
-            createdAt: m.createdAt,
-        }));
-
-        res.json(data);
+        res.json(docs.map(toWire(String(evId))));
     } catch (err) {
         next(err);
     }
@@ -73,27 +84,26 @@ export async function createEventMessage(req, res, next) {
         const userId = req.user?._id;
         if (!userId) return next(createError(401, "Not authenticated"));
 
-        const eventId = await resolveEventIdOrThrow(req.params.eventId);
-        const text = (req.body?.text ?? "").toString().trim();
+        const evId = await resolveEventIdOrThrow(req.params.eventId);
+        let text = String(req.body?.text || "").trim();
         if (!text) return next(createError(400, "Text is required"));
+        if (text.length > MAX_LEN) text = text.slice(0, MAX_LEN);
 
-        const msg = await Message.create({ eventId, sender: userId, text });
+        const msg = await Message.create({ eventId: evId, sender: userId, text });
+        await msg.populate("sender", "fullName username");
 
-        res.status(201).json({
-            _id: String(msg._id),
-            text,
-            sender: {
-                _id: String(userId),
-                fullName: req.user.fullName,
-                username: req.user.username,
-            },
-            createdAt: msg.createdAt,
-        });
+        res.status(201).json(toWire(String(evId))(msg));
     } catch (err) {
         next(err);
     }
 }
 
+/**
+ * GET /api/chat/global/messages
+ * Query:
+ *   - limit (default 200, max 500)
+ *   - before (message _id)
+ */
 export async function listGlobalMessages(req, res, next) {
     try {
         const { before, limit = 200 } = req.query;
@@ -110,20 +120,7 @@ export async function listGlobalMessages(req, res, next) {
             .populate("sender", "fullName username")
             .lean();
 
-        res.json(
-            docs.map((d) => ({
-                _id: String(d._id),
-                text: d.text,
-                sender: d.sender
-                    ? {
-                        _id: String(d.sender._id),
-                        fullName: d.sender.fullName || "",
-                        username: d.sender.username || "",
-                    }
-                    : null,
-                createdAt: d.createdAt,
-            }))
-        );
+        res.json(docs.map(toWire("global")));
     } catch (err) {
         next(err);
     }
@@ -135,26 +132,21 @@ export async function listGlobalMessages(req, res, next) {
  */
 export async function createGlobalMessage(req, res, next) {
     try {
-        const text = String(req.body?.text || "").trim();
+        const userId = req.user?._id;
+        if (!userId) return next(createError(401, "Not authenticated"));
+
+        let text = String(req.body?.text || "").trim();
         if (!text) return res.status(400).json({ message: "Text is required" });
+        if (text.length > MAX_LEN) text = text.slice(0, MAX_LEN);
 
         const msg = await Message.create({
-            sender: req.user._id,
+            sender: userId,
             text,
             eventId: null, // global
         });
+        await msg.populate("sender", "fullName username");
 
-        // shape consistent with list response
-        res.status(201).json({
-            _id: String(msg._id),
-            text: msg.text,
-            sender: {
-                _id: String(req.user._id),
-                fullName: req.user.fullName || "",
-                username: req.user.username || "",
-            },
-            createdAt: msg.createdAt,
-        });
+        res.status(201).json(toWire("global")(msg));
     } catch (err) {
         next(err);
     }

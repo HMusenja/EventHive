@@ -71,8 +71,11 @@ const io = new Server(httpServer, {
 });
 
 io.use(socketAuth);                 // ✅ socket.io auth ONLY
-io.on("connection", (socket) => {   // ✅ single connection handler
+io.on("connection", (socket) => {
   setupSocketHandlers(io, socket);
+  socket.on("error", (err) => {
+    console.warn("[socket error]", err?.message || err);
+  });
 });
 
 // ---------- Start ----------
