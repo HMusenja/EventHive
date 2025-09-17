@@ -1,5 +1,5 @@
-// src/context/AuthContext.jsx
-import { createContext, useContext, useEffect, useReducer } from "react";
+import { createContext, useReducer, useContext, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { authReducer } from "../reducers/authReducer";
 import {
   getCurrentUser,
@@ -8,47 +8,44 @@ import {
   logoutUser,
 } from "../api/authApi";
 import { getMyOrganizing } from "@/api/eventsApi";
+import { useToast } from "@/hooks/use-toast";
 
 const AuthContext = createContext();
 
 const initialState = {
   user: null,
   isAuthenticated: false,
-  loading: true,
+  loading: false,
   loaded: false,
   error: null,
 };
 
 async function attachOrganizerFlag(user) {
-  if (!user || !user._id) return { ...user, isOrganizer: false };
+  if (!user?._id) return { ...user, isOrganizer: false };
 
   try {
-    console.log("[AuthContext] Checking if user is organizer...");
     const data = await getMyOrganizing();
     const events = Array.isArray(data) ? data : data?.events || [];
-    const isOrganizer = events.length > 0;
-    console.log("[AuthContext] isOrganizer →", isOrganizer);
-    return { ...user, isOrganizer };
+    return { ...user, isOrganizer: events.length > 0 };
   } catch (err) {
-    console.warn(
-      "[AuthContext] Failed to attach organizer flag:",
-      err.message || err
-    );
+    console.warn("[AuthContext] Failed to attach organizer flag:", err.message);
     return { ...user, isOrganizer: false };
   }
 }
 
 export const AuthProvider = ({ children }) => {
+  const navigate = useNavigate();
+  const { toast } = useToast();
   const [state, dispatch] = useReducer(authReducer, initialState);
-
 
   // Fetch current user on app load
   const fetchUser = async () => {
     try {
       dispatch({ type: "AUTH_LOADING" });
-      const res = await getCurrentUser(); // expects { data: { user } }
+      const res = await getCurrentUser();
       const rawUser = res.data?.user;
       const userWithFlag = await attachOrganizerFlag(rawUser);
+
       dispatch({ type: "AUTH_SUCCESS", payload: userWithFlag });
       return { ok: true, user: userWithFlag };
     } catch (error) {
@@ -62,33 +59,23 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // fetchUser only on initial load, not after login
+  // Run only once on mount
   useEffect(() => {
-    if (!state.loaded) {
-      fetchUser();
-    }
+    if (!state.loaded) fetchUser();
   }, []);
 
+  // Login
   const login = async ({ identifier, password }) => {
-
     try {
       dispatch({ type: "AUTH_LOADING" });
-      console.log("[AuthContext] Logging in...");
       const res = await loginUser({ identifier, password });
       const rawUser = res.data?.user;
 
-      // attach flag ONCE
-      console.debug("[AuthContext] Checking if user is organizer...");
       const userWithFlag = await attachOrganizerFlag(rawUser);
-      console.log("[AuthContext] Login successful:", userWithFlag);
-
       dispatch({ type: "AUTH_SUCCESS", payload: userWithFlag });
+
       return { ok: true, user: userWithFlag };
     } catch (error) {
-      console.error(
-        "[AuthContext] Login failed:",
-        error.response?.data?.message || error.message
-      );
       dispatch({
         type: "AUTH_ERROR",
         payload: error.response?.data?.message || "Login failed",
@@ -97,21 +84,16 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Register
   const register = async (userData) => {
     try {
       dispatch({ type: "AUTH_LOADING" });
-      console.log("[AuthContext] Registering user...");
       const res = await registerUser(userData);
       const rawUser = res.data?.user;
       const userWithFlag = await attachOrganizerFlag(rawUser);
-      console.log("[AuthContext] Registration successful:", userWithFlag);
       dispatch({ type: "AUTH_SUCCESS", payload: userWithFlag });
       return { ok: true, user: userWithFlag };
     } catch (error) {
-      console.error(
-        "[AuthContext] Registration failed:",
-        error.response?.data?.message || error.message
-      );
       dispatch({
         type: "AUTH_ERROR",
         payload: error.response?.data?.message || "Registration failed",
@@ -120,21 +102,16 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const registerLite = async (userData) => {
-    try {
-      const res = await registerUser(userData);
-      return res.data;
-    } catch (error) {
-      throw error;
-    }
-  };
-
+  // Logout
   const logout = async () => {
     try {
-      console.log("[AuthContext] Logging out...");
       await logoutUser();
       dispatch({ type: "AUTH_LOGOUT" });
-      console.log("[AuthContext] Logged out.");
+      toast({
+        title: "Signed out",
+        description: "You have been successfully logged out.",
+      });
+      navigate("/");
     } catch (err) {
       console.error("[AuthContext] Logout failed:", err.message);
     }
@@ -144,13 +121,10 @@ export const AuthProvider = ({ children }) => {
     <AuthContext.Provider
       value={{
         ...state,
-        authDispatch: dispatch,
-        logout,
         login,
         register,
-        registerLite,
+        logout,
         fetchUser,
-        refreshMe: fetchUser,
       }}
     >
       {children}
@@ -162,18 +136,8 @@ export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
     console.warn("[useAuth] Tried to use AuthContext outside its provider.");
-    return {
-      user: null,
-      isAuthenticated: false,
-      loading: true,
-      loaded: false,
-      error: null,
-      authDispatch: () => {},
-      logout: () => {},
-      login: () => {},
-      register: () => {},
-      fetchUser: () => {},
-    };
+    return { user: null, isAuthenticated: false, loading: true, logout: () => {} };
   }
   return context;
 };
+

@@ -6,8 +6,9 @@ const TicketLineSchema = new Schema(
     ticketId: { type: Types.ObjectId, ref: "Ticket", required: true },
     ref: { type: String, required: true }, // unique ticket code / QR
     status: { type: String, enum: ["issued", "revoked", "used"], default: "issued" },
+    issuedAt: { type: Date, default: Date.now },
   },
-  { _id: false }
+   { _id: true } // enable subdocument _id (default), explicit for clarity
 );
 
 const OrderSchema = new Schema(

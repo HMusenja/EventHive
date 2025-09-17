@@ -62,14 +62,17 @@ async function findOrCreateGuestUser({ email, fullName }) {
 async function orderSnapshot(orderId) {
   const o = await Order.findById(orderId).lean();
   if (!o) return null;
+
   return {
     success: true,
     mode: o.status === "fulfilled" ? "fulfilled" : "awaiting_payment",
     orderId: String(o._id),
     eventId: o.eventId,
     ticketId: o.ticketId,
+    // include each ticket's subdoc _id if present
     tickets: (o.tickets || []).map(t => ({
-      ticketId: t.ticketId,
+      _id: t._id ? String(t._id) : undefined,
+      ticketId: t.ticketId ? String(t.ticketId) : undefined,
       ref: t.ref,
       status: t.status,
     })),

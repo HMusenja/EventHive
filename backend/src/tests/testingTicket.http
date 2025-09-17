@@ -1,0 +1,126 @@
+# Variables (replace as needed)
+@api_base = http://localhost:5000/api
+@event_id = 68c410d3209c849a19477914
+@ticket_id = 68c411bf209c849a1947791b
+@token = REPLACE_WITH_BEARER_TOKEN
+@cookie = token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2OGJhMGFkNzAyMzI2ZTgzNzI5ZjZjMzQiLCJpYXQiOjE3NTgwMDk0NjYsImV4cCI6MTc1ODYxNDI2Nn0.Q39pQ5x5aUQjFIy2Wq_QYuavBbfafujMFd411cggQk4; Max-Age=86400; Path=/; Expires=Wed, 17 Sep 2025 07:57:46 GMT; HttpOnly; SameSite=Strict
+
+
+
+### Login
+POST http://localhost:5000/api/users/login
+Content-Type: application/json
+
+{
+  "email": "user4@mail.com",
+  "password": "123456"
+}
+
+################################################################
+# 1) Create a ticket for an event (admin)
+#    POST /api/tickets
+#    Body: eventId, name, description, priceCents, quantityTotal, salesStartAt, salesEndAt
+#    Adjust route if your backend uses a different admin path.
+################################################################
+POST {{api_base}}/tickets
+Content-Type: application/json
+# Authorization: Bearer {{token}}      <-- uncomment if admin token required
+# Cookie: {{cookie}}                  <-- or use cookie auth
+
+{
+  "eventId": "{{event_id}}",
+  "name": "VIP Pass - Automated Test",
+  "description": "Test ticket created via HTTP test file",
+  "priceCents": 29900,
+  "currency": "usd",
+  "quantityTotal": 100,
+  "salesStartAt": "2025-01-01T09:00:00.000Z",
+  "salesEndAt": "2025-12-31T23:59:59.000Z",
+  "isActive": true
+}
+
+### Get Event by slug (sanity)
+GET {{api_base}}/events/BigApple-2027
+
+################################################################
+# 2) List tickets for an event (public)
+#    GET /api/tickets/event/:eventId
+################################################################
+GET {{api_base}}/tickets/event/{{event_id}}
+Accept: application/json
+
+################################################################
+# 3) Guest checkout (creates an order for a guest; uses checkoutGuest)
+#    POST /api/ticketing/checkout-guest
+#    This should return an orderId or payment redirect token depending on your backend.
+################################################################
+POST {{api_base}}/ticketing/checkout-guest
+Content-Type: application/json
+
+{
+  "eventId": "{{event_id}}",
+  "items": [
+    {
+      "ticketId": "{{ticket_id}}",    # returned from event tickets response
+      "quantity": 1
+    }
+  ],
+  "customer": {
+    "name": "Guest Tester",
+    "email": "guest@example.test",
+    "phone": "+10000000000"
+  },
+  "paymentMethod": "dummy",          # adjust to what the backend expects (e.g., "card")
+  "metadata": { "source": "http-test" }
+}
+
+################################################################
+# 4) Signed checkout (requires auth session or Bearer token)
+#    POST /api/ticketing/checkout
+################################################################
+POST {{api_base}}/ticketing/checkout
+Content-Type: application/json
+# Authorization: Bearer {{token}}
+# Or use cookie auth:
+Cookie: {{cookie}}
+
+{
+  "eventId": "68c410d3209c849a19477914",
+  "items": [
+    { "ticketId": "68c411bf209c849a1947791b", "quantity": 1 }
+  ],
+  "paymentMethod": "dummy",
+  "metadata": { "source": "signed-http-test" }
+}
+
+################################################################
+# 5) Complete dummy payment (simulate webhook or finalization)
+#    POST /api/ticketing/dummy/complete
+#    Provide the orderId returned from checkout endpoints
+################################################################
+POST {{api_base}}/ticketing/dummy/complete
+Content-Type: application/json
+
+{
+  "orderId": "REPLACE_WITH_ORDER_ID_FROM_CHECKOUT"
+}
+
+################################################################
+# 6) List *my* tickets (requires auth)
+#    GET /api/tickets/mine
+#    This returns tickets owned by the authenticated user
+################################################################
+GET {{api_base}}/tickets/mine
+Accept: application/json
+# Authorization: Bearer {{token}}
+# Or for cookie-based session:
+Cookie: {{cookie}}
+
+################################################################
+# 7) Debug: raw GET /api/tickets (optional)
+#    In case you have a generic list endpoint, use it to inspect all tickets
+################################################################
+GET {{api_base}}/tickets
+Accept: application/json
+Authorization: Bearer {{token}}
+# Cookie: {{cookie}}

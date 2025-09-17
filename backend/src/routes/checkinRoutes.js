@@ -10,7 +10,7 @@ const router = express.Router();
 router.post(
   "/events/:eventId/checkin",
   checkToken,
-  requireEventRole(["organizer", "staff"]),
+  // requireEventRole(["organizer", "staff"]),
   checkIn
 );
 

@@ -2,8 +2,32 @@ import axios from "./axiosConfig";  // uses your configured axios instance
 
 // GET tickets for an event
 export const fetchTickets = (eventId) =>
- 
-  axios.get(`/tickets/event/${eventId}`).then(r => r.data?.tickets || []);
+  axios.get(`/tickets/event/${eventId}`)
+    .then(r => r.data?.tickets || [])
+    .catch(err => {
+      console.error("[ticketsApi.fetchTickets] error:", err?.response?.data || err.message);
+      throw err;
+    });
+
+  // GET tickets for logged-in user (instrumented)
+export const fetchMyTickets = () =>
+  axios.get("/tickets/mine")
+    .then(r => {
+      console.debug("[ticketsApi.fetchMyTickets] response data:", r?.data);
+      return r.data?.tickets || [];
+    })
+    .catch(err => {
+      // show more diagnostics
+      const resp = err?.response;
+      console.error("[ticketsApi.fetchMyTickets] API error:", {
+        status: resp?.status,
+        data: resp?.data,
+        headers: resp?.headers,
+        message: err.message,
+      });
+      throw err;
+    });
+
 
 // Guest checkout (free or paid dummy)
 export const checkoutGuest = (payload) =>

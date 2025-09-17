@@ -8,6 +8,8 @@ import { AuthProvider } from "./context/AuthContext.jsx";
 import { EventProvider } from "./context/EventContext.jsx";
 import { ThemeProvider } from "./context/ThemeContext.jsx";
 import { AttendeeProvider } from "./context/AttendeeContext.jsx";
+import { NotificationProvider } from "./context/NotificationContext.jsx";
+import { TicketProvider } from "./context/TicketContext.jsx";
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
@@ -16,7 +18,11 @@ createRoot(document.getElementById("root")).render(
         <AuthProvider>
           <EventProvider>
             <AttendeeProvider>
-              <App />
+                <NotificationProvider>   
+               <TicketProvider>
+                  <App />
+                </TicketProvider>
+              </NotificationProvider>
             </AttendeeProvider>
           </EventProvider>
         </AuthProvider>
