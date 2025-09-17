@@ -119,6 +119,7 @@ export const checkIn = async (req, res, next) => {
     return res.json({
       ok: true,
       message: "Checked in",
+       selfCheckin: isOwner,
       ticket: { ref, status: "used", usedAt, type: ticketType?.name || "Ticket" },
       attendee: { userId: String(order.userId), name: user?.fullName, email: user?.email },
       eventId: String(order.eventId),

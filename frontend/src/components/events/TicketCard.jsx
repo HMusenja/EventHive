@@ -90,15 +90,20 @@ export default function TicketCard({
 
     const currency = ticketType?.currency || ticket.currency || "eur";
 
-    const priceCents =
-  (ticketType && typeof ticketType.priceCents === "number"
-    ? ticketType.priceCents
-    : typeof ticket.amountTotal === "number"
-      ? ticket.amountTotal
-      : typeof ticket.priceCents === "number"
-        ? ticket.priceCents
-        : 0);
-
+    let priceCents = 0;
+    if (ticketType && typeof ticketType.priceCents === "number") {
+      priceCents = ticketType.priceCents;
+    } else if (typeof ticket.priceCents === "number") {
+      priceCents = ticket.priceCents;
+    } else if (typeof ticket.amountTotal === "number") {
+      const qtyFromTicket = Number(ticket.quantity ?? ticket.qty ?? 1);
+      priceCents =
+        qtyFromTicket > 0
+          ? Math.round(ticket.amountTotal / qtyFromTicket)
+          : ticket.amountTotal;
+    } else {
+      priceCents = 0;
+    }
     const quantityTotal =
       (ticketType && typeof ticketType.quantityTotal === "number"
         ? ticketType.quantityTotal
