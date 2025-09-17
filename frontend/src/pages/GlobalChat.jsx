@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams, useNavigate, useLocation, Navigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { Loader2, MessageSquareText, Globe, Search } from "lucide-react";
 import api from "@/lib/axios";
 import socket, { connectSocket } from "@/lib/socket";
 import { useAuth } from "@/context/AuthContext";
-import { Loader2, MessageSquareText, Globe, Search } from "lucide-react";
+import AuthModal from "@/components/AuthModal";
 
 /** --------- helpers --------- */
 const labelFor = (sender) => {
@@ -30,7 +31,8 @@ const formatTime = (d) => {
 };
 
 const isSameDay = (a, b) => {
-    const da = new Date(a), db = new Date(b);
+    const da = new Date(a),
+        db = new Date(b);
     return (
         da.getFullYear() === db.getFullYear() &&
         da.getMonth() === db.getMonth() &&
@@ -60,10 +62,8 @@ export default function GlobalChat() {
     const location = useLocation();
     const { user, isAuthenticated, loading } = useAuth();
 
-    // GUEST GATE
-    if (!loading && !isAuthenticated) {
-        return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
-    }
+    // modal state when guest opens chat
+    const [showAuth, setShowAuth] = useState(false);
 
     // selected room state
     const [activeRoom, setActiveRoom] = useState(
@@ -109,9 +109,19 @@ export default function GlobalChat() {
         });
     };
 
-    /** ----- fetch events ----- */
+    /** ----- open auth modal for guests ----- */
     useEffect(() => {
-        if (!isAuthenticated) return;
+        if (!loading && !isAuthenticated) setShowAuth(true);
+    }, [loading, isAuthenticated]);
+
+    /** ----- fetch events (auth only) ----- */
+    useEffect(() => {
+        if (!isAuthenticated) {
+            setEvents([]);
+            setEventsLoading(false);
+            return;
+        }
+
         let alive = true;
         (async () => {
             try {
@@ -128,7 +138,10 @@ export default function GlobalChat() {
                 if (alive) setEventsLoading(false);
             }
         })();
-        return () => { alive = false; };
+
+        return () => {
+            alive = false;
+        };
     }, [isAuthenticated]);
 
     /** ----- background cover ----- */
@@ -147,7 +160,14 @@ export default function GlobalChat() {
     const roomKey = activeRoom.kind === "global" ? "global" : String(activeRoom.id);
 
     useEffect(() => {
-        if (!isAuthenticated) return;
+        if (!isAuthenticated) {
+            // stop the endless spinner for guests and show auth overlay
+            setLoadingHistory(false);
+            msgIndex.current = new Map();
+            setMessages([]);
+            return;
+        }
+
         let alive = true;
         setLoadingHistory(true);
         msgIndex.current = new Map();
@@ -201,7 +221,7 @@ export default function GlobalChat() {
 
         socket.on("connect", onConnect);
         socket.on("chat_message", onMsg);
-        socket.emit("join_room", rk); // join immediately too
+        socket.emit("join_room", rk);
 
         return () => {
             socket.off("connect", onConnect);
@@ -262,7 +282,7 @@ export default function GlobalChat() {
     /** ----- send ----- */
     const sendMessage = (e) => {
         e.preventDefault();
-        if (!isAuthenticated) return; // extra safety
+        if (!isAuthenticated) return;
         const trimmed = text.trim();
         if (!trimmed) return;
 
@@ -270,7 +290,7 @@ export default function GlobalChat() {
         const tmp = {
             _id: tmpId,
             text: trimmed,
-            sender: { _id: myId, fullName: user?.fullName, username: user?.username }, // <- important
+            sender: { _id: myId, fullName: user?.fullName, username: user?.username },
             createdAt: new Date().toISOString(),
             room: roomKey,
         };
@@ -401,7 +421,7 @@ export default function GlobalChat() {
                 </aside>
 
                 {/* Chat panel */}
-                <section className="rounded-2xl border bg-background/70 backdrop-blur shadow-sm">
+                <section className="relative rounded-2xl border bg-background/70 backdrop-blur shadow-sm">
                     {/* Header */}
                     <div className="flex items-center gap-3 border-b p-3 md:p-4">
                         <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-white shadow-md">
@@ -455,6 +475,7 @@ export default function GlobalChat() {
                                 }}
                                 placeholder={`Message ${activeRoom.kind === "global" ? "Global chat" : "this event"}…`}
                                 className="min-h-10 max-h-28 flex-1 resize-none rounded-xl border bg-background px-3 py-2 leading-6 outline-none ring-0 focus:border-primary/40"
+                                disabled={!isAuthenticated}
                             />
 
                             <button
@@ -463,13 +484,14 @@ export default function GlobalChat() {
                                     }`}
                                 title="Emoji"
                                 onClick={() => setShowEmoji((v) => !v)}
+                                disabled={!isAuthenticated}
                             >
                                 🙂
                             </button>
 
                             <button
                                 type="submit"
-                                disabled={!text.trim()}
+                                disabled={!text.trim() || !isAuthenticated}
                                 className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-primary-foreground shadow hover:brightness-110 disabled:opacity-50"
                             >
                                 Send
@@ -524,8 +546,44 @@ export default function GlobalChat() {
                             </div>
                         )}
                     </form>
+
+                    {/* Guest overlay (and modal mount) */}
+                    {!loading && !isAuthenticated && (
+                        <div className="absolute inset-0 z-20 grid place-items-center bg-background/70 backdrop-blur-sm rounded-2xl">
+                            <div className="max-w-sm w-[92%] rounded-2xl border bg-background p-6 text-center shadow-xl">
+                                <h3 className="text-lg font-semibold">Sign in to join the chat</h3>
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    Create an account or log in to send messages.
+                                </p>
+                                <div className="mt-4 flex items-center justify-center gap-2">
+                                    <button
+                                        className="rounded-xl bg-primary px-4 py-2 text-primary-foreground shadow hover:brightness-110"
+                                        onClick={() => setShowAuth(true)}
+                                    >
+                                        Log in
+                                    </button>
+                                    <a
+                                        href="/"
+                                        className="rounded-xl border px-4 py-2 hover:bg-muted"
+                                    >
+                                        Go to the main page
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </section>
             </div>
+
+            {/* Auth modal */}
+            <AuthModal
+                open={showAuth}
+                isOpen={showAuth}
+                onOpenChange={setShowAuth}
+                onClose={() => setShowAuth(false)}
+                defaultTab="login"
+                redirectTo={location.pathname}
+            />
         </div>
     );
 }
@@ -566,3 +624,10 @@ function MessageBubble({ msg, isMe }) {
         </div>
     );
 }
+
+/** ----- tiny emoji set ----- */
+const COMMON_EMOJIS = [
+    "😀", "😁", "😂", "🤣", "😊", "😍", "😘", "😎",
+    "🤩", "🥳", "🤗", "👍", "👏", "🙏", "🔥", "✨",
+    "🎉", "🎸", "☕", "💡", "🤘", "🖤", "💬", "📸",
+];

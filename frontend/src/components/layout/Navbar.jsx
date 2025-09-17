@@ -37,6 +37,7 @@ import { useTheme } from "@/context/ThemeContext";
 import ThemeToggle from "./ThemeToggle";
 import AuthModal from "../AuthModal";
 import GlobalChatButton from "@/components/nav/GlobalChatButton";
+import { useToast } from "@/hooks/use-toast";
 
 function relativeTime(ts) {
   if (!ts) return "Just now";
@@ -63,6 +64,7 @@ export default function Navbar() {
   const { user, logout, refreshMe, loading, initialized } = useAuth();
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
+  const { toast } = useToast();
 
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState("login");
@@ -73,8 +75,22 @@ export default function Navbar() {
   }
 
   async function handleLogout() {
-    await logout();
-    navigate("/");
+    try {
+      await logout();
+      toast({
+        title: "You’re logged out",
+        description: "We hope to see you again soon ✨",
+        duration: 9000,
+      });
+      navigate("/");
+    } catch (err) {
+      console.error("Logout failed:", err);
+      toast({
+        title: "Logout failed",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    }
   }
 
   const isAuthed = !!user;
