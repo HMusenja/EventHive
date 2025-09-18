@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import RequestMeetingButton from "@/components/meetings/RequestMeetingButton";
 
 function initials(name = "") {
   const p = name.trim().split(/\s+/);
@@ -14,6 +15,9 @@ export default function PeopleCard({
   shared = [],
   other = [],
   profileUrl = "#",
+  // NEW: pass these when you render the card
+  hostId,          // ← MUST be a User ID (Meeting model expects User refs)
+  eventId = null,  // ← optional, include if meetings belong to an event
 }) {
   const shortBio = bio && bio.length > 160 ? bio.slice(0, 157) + "…" : bio;
 
@@ -57,10 +61,10 @@ export default function PeopleCard({
               <Button size="sm" asChild>
                 <a href={profileUrl}>View profile</a>
               </Button>
-              {/* Future:
-              <Button size="sm" variant="ghost" className="ml-2">Message</Button>
-              <Button size="sm" variant="ghost" className="ml-1">Bookmark</Button>
-              */}
+              {/* NEW: Request a meeting with this person */}
+              {hostId && (
+                <RequestMeetingButton hostId={hostId} eventId={eventId} />
+              )}
             </div>
           </div>
         </CardContent>

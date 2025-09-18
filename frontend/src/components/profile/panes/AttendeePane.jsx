@@ -11,13 +11,16 @@ import ProfileHeader from "../shared/ProfileHeader";
 import AvatarCard from "../shared/AvatarCard";
 import TagSection from "../shared/TagSection";
 import { useAttendee } from "@/context/AttendeeContext";
-import { useToast } from "@/hooks/use-toast"; 
+import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
+import RequestMeetingButton from "@/components/meetings/RequestMeetingButton";
 
 export default function AttendeePane({ user }) {
   const { state, attendee, interests, loadMyAttendee, saveMyAttendee, addInterest, removeInterestAt } = useAttendee();
   const { toast } = useToast();
   const auth = useAuth();
+  const meId = auth?.user?._id;
+  const isMe = meId === user?._id;
 
   useEffect(() => {
     if (!state.initialized) loadMyAttendee();
@@ -87,10 +90,19 @@ export default function AttendeePane({ user }) {
                   </div>
                 )}
                 <Separator />
-                <p className="text-sm text-left">{view.bio || "Write a short bio so people can discover you."}</p>
+                <p className="text-sm text-left">
+                  {view.bio || "Write a short bio so people can discover you."}
+                </p>
               </>
             }
           />
+
+          {/* ✅ valid: conditional JSX after the component, not inside its props */}
+          {!isMe && (
+            <div className="mt-3">
+              <RequestMeetingButton hostId={user._id} eventId={null} />
+            </div>
+          )}
         </div>
 
         <div className="lg:col-span-2">

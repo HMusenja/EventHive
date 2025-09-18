@@ -5,11 +5,10 @@ import mongoose from "mongoose";
 // naive overlap detector (MVP)
 async function hasConflict({ userId, startAt, endAt }) {
     return await Meeting.exists({
-        $or: [{ requesterId: userId }, { inviteeId: userId }],
         status: { $in: ["pending", "accepted"] },
-        $or: [
-            { startAt: { $lt: endAt }, endAt: { $gt: startAt } }, // overlap
-        ],
+        $or: [{ requesterId: userId }, { inviteeId: userId }],
+        startAt: { $lt: endAt },
+        endAt: { $gt: startAt },
     });
 }
 
@@ -89,16 +88,18 @@ export async function updateMeetingStatus(req, res, next) {
 // GET /api/meetings?eventId=...&role=mine|incoming|outgoing
 export async function listMeetings(req, res, next) {
     try {
-        if (!req.user?._id) return res.status(401).json({ message: "Unauthorized" });
         const { eventId, role } = req.query;
-        const q = { eventId };
         const uid = req.user._id;
 
-        if (role === "incoming") q.inviteeId = uid;
-        else if (role === "outgoing") q.requesterId = uid;
-        else q.$or = [{ requesterId: uid }, { inviteeId: uid }];
+        const q = {};
+        if (eventId) q.eventId = eventId;
+        if (role === "incoming") q.inviteeId = req.user._id;
+        else if (role === "outgoing") q.requesterId = req.user._id;
+        else q.$or = [{ requesterId: req.user._id }, { inviteeId: req.user._id }];
 
-        const items = await Meeting.find(q).sort({ startAt: 1 }).lean();
-        res.json({ meetings: items });
-    } catch (err) { next(err); }
+        const meetings = await Meeting.find(q).sort({ startAt: 1 }).lean();
+        res.json({ meetings });
+    } catch (err) {
+        next(err);
+    }
 }
