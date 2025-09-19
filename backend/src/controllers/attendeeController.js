@@ -5,6 +5,7 @@ import Attendee from "../models/Attendee.js";
 import Event from "../models/Event.js";
 import EventMember from "../models/EventMember.js";
 import createError from "http-errors";
+import Ticket from "../models/Ticket.js";
 
 export const createAttendee = async (req, res, next) => {
   try {
@@ -98,7 +99,7 @@ export const getEventAttendeeCount = async (req, res, next) => {
     const by = (req.query.by || "").toLowerCase();
     const detailed = String(req.query.detailed || "").toLowerCase() === "true";
 
-    // Resolve event _id
+    // Resolve eventId
     let evId;
     if (by === "slug" || !mongoose.isValidObjectId(eventId)) {
       const ev = await Event.findOne({ slug: eventId }).select("_id").lean();
@@ -110,13 +111,12 @@ export const getEventAttendeeCount = async (req, res, next) => {
       if (!exists) return next(createError(404, "Event not found"));
     }
 
-    // Core counts (fast)
+    // 1. Attendees
     const [attendeeCount, checkedInCount] = await Promise.all([
       Attendee.countDocuments({ eventId: evId, status: "approved" }),
       Attendee.countDocuments({ eventId: evId, status: "approved", checkedInAt: { $ne: null } }),
     ]);
 
-    // Always compute non-guest memberCount via a small lookup
     const split = await Attendee.aggregate([
       { $match: { eventId: new mongoose.Types.ObjectId(evId), status: "approved" } },
       {
@@ -132,15 +132,45 @@ export const getEventAttendeeCount = async (req, res, next) => {
       { $group: { _id: "$u.isGuest", n: { $sum: 1 } } },
     ]);
 
-    const guests = split.find(s => s._id === true)?.n || 0;
-    const members = split.find(s => s._id === false)?.n || 0;
+    const guests = split.find((s) => s._id === true)?.n || 0;
+    const members = split.find((s) => s._id === false)?.n || 0;
+
+    // 2. Tickets (capacity, sold, revenue, min price)
+    const tickets = await Ticket.find({ eventId: evId }).lean();
+
+    const capacityTotal = tickets.reduce(
+      (sum, t) => sum + (t?.quantityTotal ?? 0),
+      0
+    );
+    const ticketsSold = tickets.reduce(
+      (sum, t) => sum + (t?.quantitySold ?? 0),
+      0
+    );
+
+    const revenueCents = tickets.reduce(
+      (sum, t) => sum + ((t?.quantitySold ?? 0) * (t?.priceCents ?? 0)),
+      0
+    );
+
+    const priceVals = tickets
+      .map((t) => t?.priceCents)
+      .filter((n) => Number.isFinite(n) && n > 0);
+    const minTicketPriceCents = priceVals.length ? Math.min(...priceVals) : null;
+
+    const currency = tickets.find((t) => t?.currency)?.currency || "eur";
 
     return res.json({
       eventId: String(evId),
-      attendeeCount,   // approved (guests + members)
-      checkedInCount,  // approved & checked in
-      memberCount: members, // ✅ always non-guest only
-      ...(detailed ? { breakdown: { guests, members } } : {}),
+      attendeeCount,
+      checkedInCount,
+      memberCount: members,
+      breakdown: detailed ? { guests, members } : undefined,
+
+      capacityTotal,
+      ticketsSold,
+      minTicketPrice: minTicketPriceCents !== null ? minTicketPriceCents / 100 : null, // convert to major units
+      totalRevenue: revenueCents / 100,
+      currency: currency.toUpperCase(),
     });
   } catch (err) {
     next(err);

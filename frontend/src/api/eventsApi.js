@@ -64,3 +64,10 @@ export async function updateOrganizerProfile(eventId, profile) {
   }
 
 }
+// Update event
+export async function updateEvent(id, payload) {
+  const { data } = await axios.patch(`/api/events/${id}`, payload, {
+    withCredentials: true,
+  });
+  return data; // updated event doc
+}

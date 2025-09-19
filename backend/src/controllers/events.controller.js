@@ -150,3 +150,89 @@ export const updateOrganizerProfile = async (req, res) => {
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
+
+export async function updateEvent(req, res, next) {
+  try {
+    const { id } = req.params;
+    const userId = req.user?._id;
+
+    const event = await Event.findById(id);
+    if (!event) return next(createError(404, "Event not found"));
+
+    // auth: owner or organizer
+    const isOwner = String(event.ownerId) === String(userId);
+    const isOrganizer = await EventMember.exists({
+      eventId: event._id,
+      userId,
+      roles: "organizer",
+    });
+
+    if (!isOwner && !isOrganizer) {
+      return next(createError(403, "Not authorized to update this event"));
+    }
+
+    // whitelist + nested merge
+    const {
+      slug, title, subtitle, description, coverImage,
+      onboardingEnabled, startAt, endAt, timezone,
+      visibility, capacity,
+      venue, organizerProfile, speakers, agenda,
+    } = req.body || {};
+
+    if (slug !== undefined) event.slug = slug;
+    if (title !== undefined) event.title = title;
+    if (subtitle !== undefined) event.subtitle = subtitle;
+    if (description !== undefined) event.description = description;
+    if (coverImage !== undefined) event.coverImage = coverImage;
+    if (onboardingEnabled !== undefined) event.onboardingEnabled = !!onboardingEnabled;
+
+    if (startAt !== undefined) event.startAt = startAt ? new Date(startAt) : event.startAt;
+    if (endAt !== undefined) event.endAt = endAt ? new Date(endAt) : event.endAt;
+    if (timezone !== undefined) event.timezone = timezone;
+
+    if (visibility !== undefined) event.visibility = visibility;
+    if (capacity !== undefined) event.capacity = Number(capacity) || 0;
+
+    if (venue && typeof venue === "object") {
+      event.venue = {
+        ...(event.venue || {}),
+        ...venue,
+        // coerce lat/lng if provided
+        ...(venue.lat !== undefined ? { lat: venue.lat === null ? null : Number(venue.lat) } : {}),
+        ...(venue.lng !== undefined ? { lng: venue.lng === null ? null : Number(venue.lng) } : {}),
+      };
+    }
+
+    if (organizerProfile && typeof organizerProfile === "object") {
+      event.organizerProfile = {
+        ...(event.organizerProfile || {}),
+        ...organizerProfile,
+        socials: {
+          ...(event.organizerProfile?.socials || {}),
+          ...(organizerProfile.socials || {}),
+        },
+      };
+    }
+
+    if (Array.isArray(speakers)) event.speakers = speakers;
+    if (Array.isArray(agenda)) event.agenda = agenda;
+
+    // basic validation
+    if (!event.title) return next(createError(400, "Title is required"));
+    if (!event.startAt || !event.endAt) {
+      return next(createError(400, "startAt and endAt are required"));
+    }
+    if (event.endAt <= event.startAt) {
+      return next(createError(400, "endAt must be after startAt"));
+    }
+
+    await event.save();
+    return res.json(event.toObject());
+  } catch (err) {
+    // handle duplicate slug nicely
+    if (err?.code === 11000 && err?.keyPattern?.slug) {
+      return next(createError(409, "Slug already in use"));
+    }
+    next(err);
+  }
+}
