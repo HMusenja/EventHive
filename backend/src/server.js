@@ -29,12 +29,15 @@ import meetingRoutes from "./routes/meetings.routes.js";
 //import messageRoutes from "./routes/messages.routes.js";
 import chatRoutes from "./routes/chat.routes.js";
 import feedbackRoutes from "./routes/feedback.routes.js";
+import notificationRoutes from "./routes/notification.routes.js";
+import uploadRoutes from "./routes/upload.routes.js";
+
 
 dotenv.config();
 await connectDB();
 
 const app = express();
-const PORT = process.env.PORT || 5050;
+const PORT = process.env.PORT || 5000;
 
 // ---------- Express middleware ----------
 app.use(cors({ origin: "http://localhost:5173", credentials: true }));
@@ -59,6 +62,9 @@ app.use("/api/meetings", meetingRoutes);
 //app.use("/api", messageRoutes);
 app.use("/api", chatRoutes);
 app.use("/api/feedback", feedbackRoutes);
+app.use("/api", notificationRoutes);
+app.use("/api/upload", uploadRoutes);
+
 
 // Errors
 app.use(routeNotFound);

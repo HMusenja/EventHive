@@ -1,10 +1,18 @@
-import { useState } from "react";
-import { Calendar, MapPin, Users, DollarSign, Plus, Search, Filter, Eye, Edit, Trash2 } from "lucide-react";
+// src/pages/dashboard/organizer/Events.jsx
+import { useEffect, useMemo, useState, useRef } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
+import {
+  Calendar as CalendarIcon,
+  Users,
+  DollarSign,
+  Plus,
+  Search,
+  Filter,
+} from "lucide-react";
+
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Select,
   SelectContent,
@@ -13,123 +21,181 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-const Events = () => {
+import {
+  getEventAttendeeCountById,
+  // getEventAttendeeCountBySlug,
+} from "@/api/attendeeApi";
+import EventCard from "@/components/event/EventCard";
+import { useEvents } from "@/context/EventContext";
+import EditEventModal from "@/components/event/EditEventModal";
+import CreateEventModal from "@/components/event/CreateEventModal";
+
+import { OrganizerTicketProvider } from "@/context/OrganizerTicketContext";
+import CreateTicketModal from "@/components/tickets/CreateTicketModal";
+import {toast} from "sonner"
+
+function pickStatus(ev) {
+  return (
+    ev?.status ??
+    ev?.state ??
+    (new Date(ev?.endAt) < new Date() ? "ended" : "live")
+  );
+}
+
+function money(n, currency = "EUR") {
+  return (Number(n) || 0).toLocaleString(undefined, {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0,
+  });
+}
+
+export default function OrganizerEventsPane() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [creating, setCreating] = useState(false);
+  const createdId = location.state?.createdId; // passed from CreateEventModal
+
+  const {
+    state: { events, loading, error, deletingId },
+    fetchMyEvents,
+     deleteEvent,
+  } = useEvents();
+
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
-  const events = [
-    {
-      id: 1,
-      title: "Tech Conference 2024",
-      description: "Annual technology conference featuring the latest innovations",
-      date: "March 15, 2024",
-      time: "9:00 AM - 6:00 PM",
-      location: "Convention Center, Downtown",
-      attendees: 450,
-      capacity: 500,
-      revenue: "$12,500",
-      ticketPrice: "$89",
-      status: "live",
-      image: "/api/placeholder/300/200"
-    },
-    {
-      id: 2,
-      title: "Startup Networking Mixer",
-      description: "Connect with entrepreneurs, investors, and innovators",
-      date: "March 20, 2024",
-      time: "6:00 PM - 10:00 PM",
-      location: "Rooftop Bar, Tech District",
-      attendees: 120,
-      capacity: 150,
-      revenue: "$3,200",
-      ticketPrice: "$45",
-      status: "upcoming",
-      image: "/api/placeholder/300/200"
-    },
-    {
-      id: 3,
-      title: "Digital Marketing Workshop",
-      description: "Hands-on workshop covering modern digital marketing strategies",
-      date: "March 8, 2024",
-      time: "2:00 PM - 5:00 PM",
-      location: "Business Center, Suite 400",
-      attendees: 85,
-      capacity: 100,
-      revenue: "$2,850",
-      ticketPrice: "$65",
-      status: "completed",
-      image: "/api/placeholder/300/200"
-    },
-    {
-      id: 4,
-      title: "AI Innovation Summit",
-      description: "Exploring the future of artificial intelligence and machine learning",
-      date: "March 25, 2024",
-      time: "8:00 AM - 7:00 PM",
-      location: "Tech Campus, Building A",
-      attendees: 380,
-      capacity: 400,
-      revenue: "$15,000",
-      ticketPrice: "$125",
-      status: "upcoming",
-      image: "/api/placeholder/300/200"
-    },
-    {
-      id: 5,
-      title: "Creative Design Masterclass",
-      description: "Learn from industry experts about modern design principles",
-      date: "April 2, 2024",
-      time: "10:00 AM - 4:00 PM",
-      location: "Design Studio, Creative Quarter",
-      attendees: 45,
-      capacity: 60,
-      revenue: "$1,800",
-      ticketPrice: "$95",
-      status: "draft",
-      image: "/api/placeholder/300/200"
-    },
-    {
-      id: 6,
-      title: "Healthcare Innovation Forum",
-      description: "Discussing breakthrough technologies in healthcare",
-      date: "April 10, 2024",
-      time: "9:00 AM - 5:00 PM",
-      location: "Medical Center Auditorium",
-      attendees: 0,
-      capacity: 300,
-      revenue: "$0",
-      ticketPrice: "$75",
-      status: "draft",
-      image: "/api/placeholder/300/200"
-    }
-  ];
+  const [openCreateTicket, setOpenCreateTicket] = useState(false);
+  const [createdEventId, setCreatedEventId] = useState(null);
+  const [createdEventEndAt, setCreatedEventEndAt] = useState("");
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'live': return 'bg-green-500';
-      case 'upcoming': return 'bg-blue-500';
-      case 'completed': return 'bg-gray-500';
-      case 'draft': return 'bg-yellow-500';
-      default: return 'bg-gray-500';
-    }
-  };
+  // map of refs to wrapper nodes so we can scroll/highlight the new card
+  const itemRefs = useRef({}); // { [id]: HTMLElement }
 
-  const getStatusText = (status) => {
-    switch (status) {
-      case 'live': return 'Live';
-      case 'upcoming': return 'Upcoming';
-      case 'completed': return 'Completed';
-      case 'draft': return 'Draft';
-      default: return status;
-    }
-  };
+  // per-event metrics from attendee/ticket API
+  // shape: { [eventId]: { attendeeCount, capacityTotal, minTicketPrice, totalRevenue, currency, checkedInCount, memberCount } }
+  const [countsMap, setCountsMap] = useState({});
 
-  const filteredEvents = events.filter(event => {
-    const matchesSearch = event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         event.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === "all" || event.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  // load only current user's events
+  useEffect(() => {
+    fetchMyEvents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // after events load, fetch metrics in parallel and store
+  useEffect(() => {
+    if (!events?.length) {
+      setCountsMap({});
+      return;
+    }
+    let cancelled = false;
+
+    (async () => {
+      const ids = Array.from(
+        new Set(events.map((e) => String(e?._id)).filter(Boolean))
+      );
+      const results = await Promise.allSettled(
+        ids.map((id) => getEventAttendeeCountById(id))
+      );
+
+      if (cancelled) return;
+      const next = {};
+      for (const r of results) {
+        if (r.status === "fulfilled" && r.value?.eventId) {
+          next[r.value.eventId] = r.value;
+        }
+      }
+      setCountsMap(next);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [events]);
+
+  // merge metrics into each event — EventCard reads attendeeCount & capacityTotal for progress bar
+  const normalized = useMemo(
+    () =>
+      (events || []).map((ev) => {
+        const id = String(ev?._id || "");
+        const m = countsMap[id] || {};
+        return {
+          ...ev,
+          // live metrics from API (fall back to 0/undefined)
+          attendeeCount: m.attendeeCount ?? 0,
+          capacityTotal: m.capacityTotal ?? 0,
+          price: Number.isFinite(m.minTicketPrice)
+            ? m.minTicketPrice
+            : undefined, // undefined → "Free" in card
+          revenue: Number.isFinite(m.totalRevenue) ? m.totalRevenue : 0,
+          currency: (m.currency || "EUR").toUpperCase(),
+          status: pickStatus(ev),
+          // keep older fields for any other UI that still uses them
+          attendees: m.attendeeCount ?? ev.attendees ?? 0,
+          capacity: m.capacityTotal ?? ev.capacity ?? 0,
+        };
+      }),
+    [events, countsMap]
+  );
+
+  const filteredEvents = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    return normalized.filter((ev) => {
+      const matchesSearch =
+        !term ||
+        ev?.title?.toLowerCase().includes(term) ||
+        ev?.subtitle?.toLowerCase().includes(term) ||
+        ev?.description?.toLowerCase().includes(term) ||
+        ev?.venue?.city?.toLowerCase().includes(term) ||
+        ev?.venue?.country?.toLowerCase().includes(term);
+      const matchesStatus =
+        statusFilter === "all" ||
+        String(ev?.status).toLowerCase() === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [normalized, searchTerm, statusFilter]);
+
+  const totalAttendees = useMemo(
+    () =>
+      filteredEvents.reduce(
+        (sum, ev) => sum + (ev.attendeeCount || ev.attendees || 0),
+        0
+      ),
+    [filteredEvents]
+  );
+  const totalRevenue = useMemo(
+    () =>
+      filteredEvents.reduce((sum, ev) => sum + (Number(ev.revenue) || 0), 0),
+    [filteredEvents]
+  );
+
+  // actions
+  const [editing, setEditing] = useState(null);
+
+  const handleView = (ev) => navigate(`/events/${ev.slug || ev._id}`);
+  const handleEdit = (ev) => setEditing(ev);
+  const handleCloseEdit = () => setEditing(null);
+const handleDelete = async (ev) => {
+  try {
+    await deleteEvent(ev._id);
+  } catch {}
+};
+  // 🔔 Highlight & scroll the newly-created event into view
+  useEffect(() => {
+    if (!createdId || !filteredEvents.length) return;
+
+    const el = itemRefs.current[String(createdId)];
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add("flash-highlight");
+      const t = setTimeout(() => el.classList.remove("flash-highlight"), 2000);
+
+      // clear state so it doesn't trigger again on back/forward
+      window.history.replaceState({}, document.title, window.location.pathname);
+
+      return () => clearTimeout(t);
+    }
+  }, [createdId, filteredEvents]);
 
   return (
     <div className="space-y-8">
@@ -143,21 +209,29 @@ const Events = () => {
             Create, manage, and track all your events in one place
           </p>
         </div>
-        <Button className="bg-gradient-to-r from-primary to-secondary">
-          <Plus className="h-4 w-4 mr-2" />
-          Create New Event
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={fetchMyEvents} disabled={loading}>
+            Refresh
+          </Button>
+          <Button
+            className="bg-gradient-to-r from-primary to-secondary"
+            onClick={() => setCreating(true)}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Create New Event
+          </Button>
+        </div>
       </div>
 
-      {/* Stats Summary */}
+      {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <Card className="border-2">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
-              <Calendar className="h-5 w-5 text-primary" />
+              <CalendarIcon className="h-5 w-5 text-primary" />
               <div>
                 <p className="text-sm text-muted-foreground">Total Events</p>
-                <p className="text-2xl font-bold">{events.length}</p>
+                <p className="text-2xl font-bold">{filteredEvents.length}</p>
               </div>
             </div>
           </CardContent>
@@ -168,7 +242,7 @@ const Events = () => {
               <Users className="h-5 w-5 text-primary" />
               <div>
                 <p className="text-sm text-muted-foreground">Total Attendees</p>
-                <p className="text-2xl font-bold">{events.reduce((sum, event) => sum + event.attendees, 0)}</p>
+                <p className="text-2xl font-bold">{totalAttendees}</p>
               </div>
             </div>
           </CardContent>
@@ -179,7 +253,7 @@ const Events = () => {
               <DollarSign className="h-5 w-5 text-primary" />
               <div>
                 <p className="text-sm text-muted-foreground">Total Revenue</p>
-                <p className="text-2xl font-bold">$34,350</p>
+                <p className="text-2xl font-bold">{money(totalRevenue)}</p>
               </div>
             </div>
           </CardContent>
@@ -187,10 +261,21 @@ const Events = () => {
         <Card className="border-2">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
-              <Calendar className="h-5 w-5 text-primary" />
+              <CalendarIcon className="h-5 w-5 text-primary" />
               <div>
                 <p className="text-sm text-muted-foreground">This Month</p>
-                <p className="text-2xl font-bold">4</p>
+                <p className="text-2xl font-bold">
+                  {
+                    filteredEvents.filter((ev) => {
+                      const d = new Date(ev?.startAt);
+                      const now = new Date();
+                      return (
+                        d.getMonth() === now.getMonth() &&
+                        d.getFullYear() === now.getFullYear()
+                      );
+                    }).length
+                  }
+                </p>
               </div>
             </div>
           </CardContent>
@@ -200,7 +285,7 @@ const Events = () => {
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search events..."
             value={searchTerm}
@@ -216,103 +301,97 @@ const Events = () => {
           <SelectContent>
             <SelectItem value="all">All Status</SelectItem>
             <SelectItem value="live">Live</SelectItem>
-            <SelectItem value="upcoming">Upcoming</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
             <SelectItem value="draft">Draft</SelectItem>
+            <SelectItem value="ended">Ended</SelectItem>
+            <SelectItem value="soldout">Sold out</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
       {/* Events Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredEvents.map((event) => (
-          <Card key={event.id} className="border-2 hover:shadow-lg transition-all duration-200 overflow-hidden">
-            <div className="aspect-video bg-gradient-to-br from-primary/10 to-secondary/10 flex items-center justify-center">
-              <Avatar className="h-20 w-20">
-                <AvatarImage src={event.image} alt={event.title} />
-                <AvatarFallback className="bg-gradient-to-br from-primary to-secondary text-primary-foreground text-2xl">
-                  {event.title.substring(0, 2)}
-                </AvatarFallback>
-              </Avatar>
-            </div>
-            
-            <CardHeader className="pb-3">
-              <div className="flex items-start justify-between gap-2">
-                <CardTitle className="text-lg line-clamp-2">{event.title}</CardTitle>
-                <Badge variant="secondary" className={`${getStatusColor(event.status)} text-white px-2 py-1 text-xs shrink-0`}>
-                  {getStatusText(event.status)}
-                </Badge>
+      {loading ? (
+        <div className="py-16 text-center text-muted-foreground">
+          Loading events…
+        </div>
+      ) : error ? (
+        <div className="py-16 text-center">
+          <p className="text-destructive mb-3">
+            Failed to load events: {error}
+          </p>
+          <Button onClick={fetchMyEvents}>Try again</Button>
+        </div>
+      ) : filteredEvents.length ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredEvents.map((ev) => {
+            const id = String(ev?._id || "");
+            return (
+              <div
+                key={id || ev.slug}
+                ref={(node) => (itemRefs.current[id] = node)}
+                className="rounded-2xl transition-shadow"
+              >
+                <EventCard
+                  variant="organizer"
+                  event={ev}
+                  onView={handleView}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                />
               </div>
-              <CardDescription className="line-clamp-2">
-                {event.description}
-              </CardDescription>
-            </CardHeader>
-            
-            <CardContent className="pt-0 space-y-3">
-              <div className="space-y-2 text-sm text-muted-foreground">
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4" />
-                  <span>{event.date} • {event.time}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4" />
-                  <span className="truncate">{event.location}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  <span>{event.attendees}/{event.capacity} attendees</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <DollarSign className="h-4 w-4" />
-                  <span>{event.revenue} • {event.ticketPrice}/ticket</span>
-                </div>
-              </div>
-              
-              <div className="flex justify-between items-center pt-2 border-t">
-                <div className="flex gap-1">
-                  <Button variant="ghost" size="sm">
-                    <Eye className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="sm">
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2 mx-3">
-                  <div 
-                    className="bg-gradient-to-r from-primary to-secondary h-2 rounded-full" 
-                    style={{ width: `${(event.attendees / event.capacity) * 100}%` }}
-                  ></div>
-                </div>
-                <span className="text-xs text-muted-foreground">
-                  {Math.round((event.attendees / event.capacity) * 100)}%
-                </span>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {filteredEvents.length === 0 && (
+            );
+          })}
+        </div>
+      ) : (
         <div className="text-center py-12">
-          <Calendar className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+          <CalendarIcon className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
           <h3 className="text-lg font-semibold mb-2">No events found</h3>
           <p className="text-muted-foreground mb-4">
-            {searchTerm || statusFilter !== "all" 
+            {searchTerm || statusFilter !== "all"
               ? "Try adjusting your search criteria"
-              : "Create your first event to get started"
-            }
+              : "Create your first event to get started"}
           </p>
-          <Button className="bg-gradient-to-r from-primary to-secondary">
+          <Button
+            className="bg-gradient-to-r from-primary to-secondary"
+            onClick={() => navigate("/dashboard/organizer/events/new")}
+          >
             <Plus className="h-4 w-4 mr-2" />
             Create New Event
           </Button>
         </div>
       )}
+
+     {/* Modals */}
+      <EditEventModal
+        open={!!editing}
+        event={editing}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) handleCloseEdit();
+        }}
+      />
+
+      {/* Event creation modal. Parent controls the post-create flow */}
+     <CreateEventModal
+  open={creating}
+  onOpenChange={setCreating}
+  onEventCreated={(evt) => {
+    setCreating(false);
+    setCreatedEventId(evt?._id || null);
+    setCreatedEventEndAt(evt?.endAt || "");
+    // Open **after** state is committed (next tick is enough)
+    setTimeout(() => setOpenCreateTicket(true), 0);
+  }}
+/>
+
+      {/* ⬇️ Ticket modal + provider live OUTSIDE the event modal */}
+      <OrganizerTicketProvider>
+  <CreateTicketModal
+    key={createdEventId || "new"}              // ✅ force fresh state per event
+    open={openCreateTicket}
+    onOpenChange={setOpenCreateTicket}
+    eventId={createdEventId}
+    eventEndAt={createdEventEndAt}
+  />
+</OrganizerTicketProvider>
     </div>
   );
-};
-
-export default Events;
+}

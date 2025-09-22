@@ -1,128 +1,181 @@
-// backend/src/scripts/seedEvents.js
-import mongoose from "mongoose";
+// backend/scripts/seedEvents.js
+// Usage: node backend/scripts/seedEvents.js
+
 import dotenv from "dotenv";
-import { connectDB } from "../config/db.js"; 
-import Event from "../models/Event.js";
-
 dotenv.config();
+import path from "path";
+import { fileURLToPath } from "url";
 
-async function seed() {
-  try {
-    await connectDB();
+import { connectDB } from "../config/db.js";
+import Event from "../models/Event.js";
+import Ticket from "../models/Ticket.js";
+import User from "../models/User.js";
+import EventMember from "../models/EventMember.js";
 
-    await Event.deleteMany({});
-    console.log("Cleared existing events");
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+// dotenv.config({ path: path.join(__dirname, "..", ".env") });
 
-    const events = [
-      {
-        slug: "eventhive-2025",
-        title: "EventHive Summit 2025",
-        subtitle: "Where builders meet users",
-        description: "A day of talks, demos, and networking.",
-        coverImage: "https://picsum.photos/1600/900?random=1",
-        startAt: new Date("2025-10-12T08:00:00+02:00"),
-        endAt: new Date("2025-10-12T20:00:00+02:00"),
-        timezone: "Europe/Berlin",
-        venue: {
-          name: "Hamburg Messe",
-          address: "Messeplatz 1",
-          city: "Hamburg",
-          country: "DE",
-          lat: 53.5597,
-          lng: 9.9772,
-        },
-        speakers: [
-          { name: "Ada Lovelace", title: "Engineer", company: "Analytica", avatarUrl: "https://i.pravatar.cc/200?img=5" },
-          { name: "Grace Hopper", title: "Rear Admiral", company: "USN", avatarUrl: "https://i.pravatar.cc/200?img=12" },
-        ],
-        agenda: [
-          { title: "Registration & Coffee", startAt: "2025-10-12T08:00:00+02:00", endAt: "2025-10-12T09:00:00+02:00", room: "Hall A", speakerNames: [] },
-          { title: "Opening Keynote", startAt: "2025-10-12T09:00:00+02:00", endAt: "2025-10-12T09:45:00+02:00", room: "Main Stage", speakerNames: ["Ada Lovelace"] },
-        ],
-      },
-      {
-        slug: "techfest-2025",
-        title: "TechFest Europe 2025",
-        subtitle: "Exploring the future of tech",
-        description: "Workshops, sessions, and exhibitions on emerging technology.",
-        coverImage: "https://picsum.photos/1600/900?random=2",
-        startAt: new Date("2025-11-05T09:00:00+01:00"),
-        endAt: new Date("2025-11-07T18:00:00+01:00"),
-        timezone: "Europe/Berlin",
-        venue: {
-          name: "Berlin Congress Center",
-          address: "Alexanderstraße 11",
-          city: "Berlin",
-          country: "DE",
-          lat: 52.5232,
-          lng: 13.4132,
-        },
-        speakers: [
-          { name: "Elon Tusk", title: "CEO", company: "MarsTech", avatarUrl: "https://i.pravatar.cc/200?img=18" },
-        ],
-        agenda: [
-          { title: "AI & Robotics Panel", startAt: "2025-11-05T10:00:00+01:00", endAt: "2025-11-05T11:30:00+01:00", room: "Main Hall", speakerNames: ["Elon Tusk"] },
-        ],
-      },
-      {
-        slug: "designcon-2025",
-        title: "DesignCon 2025",
-        subtitle: "Innovations in UX and Product Design",
-        description: "A conference for designers to share best practices and case studies.",
-        coverImage: "https://picsum.photos/1600/900?random=3",
-        startAt: new Date("2025-09-20T09:00:00+02:00"),
-        endAt: new Date("2025-09-22T17:00:00+02:00"),
-        timezone: "Europe/Paris",
-        venue: {
-          name: "Palais des Congrès",
-          address: "2 Place de la Porte Maillot",
-          city: "Paris",
-          country: "FR",
-          lat: 48.8789,
-          lng: 2.2820,
-        },
-        speakers: [
-          { name: "Don Norman", title: "Author", company: "The Design Lab", avatarUrl: "https://i.pravatar.cc/200?img=45" },
-        ],
-        agenda: [
-          { title: "Human-Centered Design", startAt: "2025-09-20T10:00:00+02:00", endAt: "2025-09-20T11:00:00+02:00", room: "Auditorium A", speakerNames: ["Don Norman"] },
-        ],
-      },
-      {
-        slug: "startup-expo-2025",
-        title: "Startup Expo 2025",
-        subtitle: "Showcasing the next generation of startups",
-        description: "An exhibition and pitch competition for global startups.",
-        coverImage: "https://picsum.photos/1600/900?random=4",
-        startAt: new Date("2025-12-01T10:00:00+01:00"),
-        endAt: new Date("2025-12-02T18:00:00+01:00"),
-        timezone: "Europe/Berlin",
-        venue: {
-          name: "Munich Expo Center",
-          address: "Am Messesee 2",
-          city: "Munich",
-          country: "DE",
-          lat: 48.1351,
-          lng: 11.5820,
-        },
-        speakers: [
-          { name: "Jane Doe", title: "Investor", company: "Future Ventures", avatarUrl: "https://i.pravatar.cc/200?img=32" },
-        ],
-        agenda: [
-          { title: "Pitch Session 1", startAt: "2025-12-01T11:00:00+01:00", endAt: "2025-12-01T12:30:00+01:00", room: "Pitch Stage", speakerNames: ["Jane Doe"] },
-        ],
-      },
-    ];
-
-    await Event.insertMany(events);
-    console.log(`Seeded ${events.length} events`);
-
-    await mongoose.disconnect();
-    process.exit(0);
-  } catch (err) {
-    console.error(err);
-    process.exit(1);
+// ---------------- helpers ----------------
+function addDays(date, d) {
+  const n = new Date(date);
+  n.setDate(n.getDate() + d);
+  return n;
+}
+function addHours(date, h) {
+  const d = new Date(date);
+  d.setHours(d.getHours() + h);
+  return d;
+}
+async function upsertUser(email) {
+  let u = await User.findOne({ email });
+  if (!u) {
+    u = await User.create({
+      email,
+      fullName: "Test Seven",
+      username: "test7",
+      password: "password123", // ⚠️ adjust if your schema requires hash
+    });
+  }
+  return u;
+}
+async function ensureClean(slugs = []) {
+  const evs = await Event.find({ slug: { $in: slugs } }).select("_id");
+  const ids = evs.map((e) => e._id);
+  if (ids.length) {
+    await Ticket.deleteMany({ eventId: { $in: ids } });
+    await Event.deleteMany({ _id: { $in: ids } });
   }
 }
+async function createEventWithTickets({
+  ownerId,
+  slug,
+  title,
+  startAt,
+  endAt,
+  coverImage,
+  tickets,
+}) {
+  const ev = await Event.create({
+    ownerId,
+    slug,
+    title,
+    subtitle: "Seeded event",
+    description: "Demo seeded event.",
+    coverImage,
+    startAt,
+    endAt,
+    timezone: "Europe/Berlin",
+    visibility: "public",
+    venue: {
+      name: "Tech Hub",
+      city: "Berlin",
+      country: "Germany",
+    },
+    organizerProfile: {
+      name: "EventHive Org",
+    },
+  });
+  await EventMember.updateOne(
+  { eventId: ev._id, userId: ownerId },
+  { $setOnInsert: { roles: ["organizer"], status: "approved" } },
+  { upsert: true }
+);
 
-seed();
+  for (const t of tickets) {
+    await Ticket.create({
+      eventId: ev._id,
+      name: t.name,
+      priceCents: t.priceCents,
+      currency: "eur",
+      quantityTotal: t.quantityTotal,
+      quantitySold: t.quantitySold ?? 0,
+    });
+  }
+  return ev;
+}
+
+// ---------------- main ----------------
+async function main() {
+  await connectDB(); // ✅ use your configDb
+  console.log("[seed] Connected");
+
+  const user = await upsertUser("test7@mail.com");
+
+  const now = new Date();
+  const slugs = [
+    "seed-live-conference",
+    "seed-ended-summit",
+    "seed-soldout-expo",
+    "seed-draft-meetup",
+  ];
+  await ensureClean(slugs);
+
+  // 1 live
+  await createEventWithTickets({
+    ownerId: user._id,
+    slug: "seed-live-conference",
+    title: "Live Conference",
+    startAt: addDays(now, 10),
+    endAt: addDays(now, 10 + 1),
+    coverImage: "https://picsum.photos/seed/live/1200/600",
+    tickets: [
+      { name: "VIP", priceCents: 15000, quantityTotal: 50, quantitySold: 10 },
+      { name: "Standard", priceCents: 7000, quantityTotal: 200, quantitySold: 50 },
+      { name: "Free", priceCents: 0, quantityTotal: 100, quantitySold: 5 },
+    ],
+  });
+
+  // 2 ended
+  await createEventWithTickets({
+    ownerId: user._id,
+    slug: "seed-ended-summit",
+    title: "Ended Summit",
+    startAt: addDays(now, -14),
+    endAt: addDays(now, -13),
+    coverImage: "https://picsum.photos/seed/ended/1200/600",
+    tickets: [
+      { name: "VIP", priceCents: 12000, quantityTotal: 30, quantitySold: 28 },
+      { name: "Standard", priceCents: 5000, quantityTotal: 150, quantitySold: 120 },
+      { name: "Free", priceCents: 0, quantityTotal: 50, quantitySold: 40 },
+    ],
+  });
+
+  // 3 sold-out
+  await createEventWithTickets({
+    ownerId: user._id,
+    slug: "seed-soldout-expo",
+    title: "Sold-Out Expo",
+    startAt: addDays(now, 20),
+    endAt: addDays(now, 21),
+    coverImage: "https://picsum.photos/seed/soldout/1200/600",
+    tickets: [
+      { name: "VIP", priceCents: 18000, quantityTotal: 40, quantitySold: 40 },
+      { name: "Standard", priceCents: 8000, quantityTotal: 220, quantitySold: 220 },
+      { name: "Free", priceCents: 0, quantityTotal: 60, quantitySold: 60 },
+    ],
+  });
+
+  // 4 draft (just private)
+  await createEventWithTickets({
+    ownerId: user._id,
+    slug: "seed-draft-meetup",
+    title: "Draft Meetup",
+    startAt: addDays(now, 30),
+    endAt: addDays(now, 31),
+    coverImage: "https://picsum.photos/seed/draft/1200/600",
+    tickets: [
+      { name: "VIP", priceCents: 15000, quantityTotal: 10 },
+      { name: "Standard", priceCents: 4000, quantityTotal: 80 },
+      { name: "Free", priceCents: 0, quantityTotal: 20 },
+    ],
+  });
+
+  console.log("[seed] Seed complete.");
+  process.exit(0);
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

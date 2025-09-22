@@ -1,0 +1,159 @@
+@BASE=http://localhost:5000
+@TOKEN=token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2OGMxNDEyYjRmZDlhZGEwYTFhZWQ5NDIiLCJpYXQiOjE3NTgyNjY0ODIsImV4cCI6MTc1ODg3MTI4Mn0.4PGN8s9nByzx710N_rjTF1PkR3TTqOVBmEes-mCcV4U; Max-Age=86400; Path=/; Expires=Sat, 20 Sep 2025 07:21:22 GMT; HttpOnly; SameSite=Strict
+
+
+
+
+
+
+
+### Login
+POST http://localhost:5000/api/users/login
+Content-Type: application/json
+
+{
+  "email": "test7@mail.com",
+  "password": "1234"
+}
+
+###
+# FULL CREATE (all schema fields populated)
+POST {{BASE}}/api/events
+Authorization: Bearer {{TOKEN}}
+Content-Type: application/json
+
+{
+  "slug": "big-apple-2026-full",
+  "title": "Big Apple 2026",
+  "subtitle": "Modern event stack for builders",
+  "description": "Hands-on sessions, networking, and live demos across the modern event stack.",
+  "coverImage": "https://res.cloudinary.com/demo/image/upload/v1700000000/sample-cover.jpg",
+  "onboardingEnabled": true,
+
+  "startAt": "2026-04-10T09:00:00.000Z",
+  "endAt": "2026-04-10T17:00:00.000Z",
+  "timezone": "Europe/Berlin",
+
+  "venue": {
+    "name": "Javits Center",
+    "address": "429 11th Ave",
+    "city": "New York",
+    "country": "US",
+    "lat": 40.757777,
+    "lng": -74.002590,
+    "mapEmbedUrl": "https://www.google.com/maps/embed?pb=YOUR_EMBED_CODE"
+  },
+
+  "speakers": [
+    {
+      "name": "Ava Thompson",
+      "title": "Head of Platform",
+      "company": "StackForge",
+      "bio": "Ava leads platform engineering and open-source strategy at StackForge.",
+      "avatarUrl": "https://res.cloudinary.com/demo/image/upload/v1700000000/ava.jpg",
+      "socials": {
+        "twitter": "https://twitter.com/ava_thompson",
+        "linkedin": "https://www.linkedin.com/in/avathompson/",
+        "github": "https://github.com/avathompson",
+        "website": "https://avathompson.dev"
+      }
+    },
+    {
+      "name": "Liam Becker",
+      "title": "CTO",
+      "company": "EventPilot",
+      "bio": "CTO at EventPilot focusing on realtime event analytics.",
+      "avatarUrl": "https://res.cloudinary.com/demo/image/upload/v1700000000/liam.jpg",
+      "socials": {
+        "twitter": "https://twitter.com/liam_codes",
+        "linkedin": "https://www.linkedin.com/in/liambecker/",
+        "github": "https://github.com/liambecker",
+        "website": "https://liambecker.dev"
+      }
+    }
+  ],
+
+  "agenda": [
+    {
+      "title": "Registration & Coffee",
+      "description": "Badge pick-up and networking over coffee.",
+      "startAt": "2026-04-10T08:30:00.000Z",
+      "endAt": "2026-04-10T09:00:00.000Z",
+      "room": "Lobby A",
+      "track": "General",
+      "speakerNames": []
+    },
+    {
+      "title": "Opening Keynote: The Modern Event Stack",
+      "description": "End-to-end architecture for scalable events.",
+      "startAt": "2026-04-10T09:00:00.000Z",
+      "endAt": "2026-04-10T09:45:00.000Z",
+      "room": "Main Hall",
+      "track": "Keynote",
+      "speakerNames": ["Ava Thompson"]
+    },
+    {
+      "title": "Realtime Analytics in Practice",
+      "description": "How to capture and visualize event analytics live.",
+      "startAt": "2026-04-10T10:00:00.000Z",
+      "endAt": "2026-04-10T10:45:00.000Z",
+      "room": "Track 1",
+      "track": "Engineering",
+      "speakerNames": ["Liam Becker"]
+    }
+  ],
+
+  "visibility": "public",
+  "capacity": 600,
+
+  "organizerProfile": {
+    "name": "EventHive Org",
+    "website": "https://eventhive.dev",
+    "bio": "We build delightful tooling for event organizers and communities.",
+    "avatarUrl": "https://res.cloudinary.com/demo/image/upload/v1700000000/eventhive-avatar.png",
+    "socials": {
+      "twitter": "https://twitter.com/eventhive",
+      "linkedin": "https://www.linkedin.com/company/eventhive/",
+      "github": "https://github.com/eventhive",
+      "website": "https://eventhive.dev"
+    }
+  }
+
+}
+
+###
+
+# Read back by slug (public route)
+GET {{BASE}}/api/events/big-apple-2026-full
+
+###
+
+# Read by ID (after you copy the _id from the create response)
+@EVENT_ID=68cd05b0798a41cc6c6a156e
+
+GET {{BASE}}/api/events/{{EVENT_ID}}
+
+###
+# Optional: partial PATCH update (only what changed)
+PATCH {{BASE}}/api/events/{{EVENT_ID}}
+Authorization: Bearer {{TOKEN}}
+Content-Type: application/json
+
+{
+  "title": "Big Apple 2026 — Spring Edition",
+  "subtitle": "Modern event stack for builders (updated)",
+  "coverImage": "https://res.cloudinary.com/demo/image/upload/v1700000000/sample-cover-updated.jpg",
+  "venue": {
+    "city": "Brooklyn"
+  }
+}
+
+###
+# Optional: attendee/ticket stats (capacity/min price/revenue etc. from your count API)
+GET {{BASE}}/api/events/{{EVENT_ID}}/attendees/count
+Authorization: Bearer {{TOKEN}}
+
+###
+# Or by slug
+GET {{BASE}}/api/events/big-apple-2026-full/attendees/count?by=slug
+Authorization: Bearer {{TOKEN}}

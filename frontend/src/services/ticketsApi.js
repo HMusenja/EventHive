@@ -2,8 +2,32 @@ import axios from "./axiosConfig";  // uses your configured axios instance
 
 // GET tickets for an event
 export const fetchTickets = (eventId) =>
- 
-  axios.get(`/tickets/event/${eventId}`).then(r => r.data?.tickets || []);
+  axios.get(`/tickets/event/${eventId}`)
+    .then(r => r.data?.tickets || [])
+    .catch(err => {
+      console.error("[ticketsApi.fetchTickets] error:", err?.response?.data || err.message);
+      throw err;
+    });
+
+  // GET tickets for logged-in user (instrumented)
+export const fetchMyTickets = () =>
+  axios.get("/tickets/mine")
+    .then(r => {
+      console.debug("[ticketsApi.fetchMyTickets] response data:", r?.data);
+      return r.data?.tickets || [];
+    })
+    .catch(err => {
+      // show more diagnostics
+      const resp = err?.response;
+      console.error("[ticketsApi.fetchMyTickets] API error:", {
+        status: resp?.status,
+        data: resp?.data,
+        headers: resp?.headers,
+        message: err.message,
+      });
+      throw err;
+    });
+
 
 // Guest checkout (free or paid dummy)
 export const checkoutGuest = (payload) =>
@@ -39,3 +63,27 @@ export const completeDummyPayment = (orderId) =>
       }
       throw err;
     });
+
+    // Organizer: list ticket types for an event
+export const listEventTickets = (eventId) =>
+  axios.get(`/tickets/event/${eventId}`).then(r => r.data?.tickets || []);
+
+// Organizer: create a ticket type for an event
+export const createEventTicket = async (eventId, data) => {
+  try {
+    const r = await axios.post(`/tickets/events/${eventId}`, data);
+    return r.data?.ticket;
+  } catch (err) {
+    const res = err?.response?.data;
+    console.error("[createEventTicket] 422 payload sent:", data);
+    console.error("[createEventTicket] 422 response:", res);
+    throw err; // keep bubbling
+  }
+};
+
+// Organizer: update & delete (optional use later)
+export const updateEventTicket = (id, data) =>
+  axios.put(`/tickets/${id}`, data).then(r => r.data?.ticket);
+
+export const deleteEventTicket = (id) =>
+  axios.delete(`/tickets/${id}`).then(() => true);

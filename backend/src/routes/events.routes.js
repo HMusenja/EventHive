@@ -6,6 +6,8 @@ import {
   getMyOrganizing,
   getMyAttending,
   updateOrganizerProfile,
+  updateEvent,
+    deleteEvent,
 } from "../controllers/events.controller.js";
 import { getEventAttendeeCount } from "../controllers/attendeeController.js";
 import { getEventDashboardStats } from "../controllers/eventAnalyticsController.js";
@@ -17,12 +19,14 @@ const router = Router();
 // Public
 router.get("/", getAllEvents);
 router.get("/:eventId/attendees/count", getEventAttendeeCount);
-router.get("/:id", getEvent);
 
 // Protected
 router.post("/", checkToken, createEvent);
 router.get("/me/organizing", checkToken, getMyOrganizing);
 router.get("/me/attending", checkToken, getMyAttending);
+
+router.get("/:id", getEvent);
+router.delete("/:id", checkToken, deleteEvent);
 router.get(
   "/:eventId/dashboard/stats",
   checkToken,
@@ -30,5 +34,6 @@ router.get(
   getEventDashboardStats
 );
 router.put("/:eventId/organizer-profile", checkToken, updateOrganizerProfile);
-export default router;
+router.patch("/:id", checkToken, updateEvent);
 
+export default router;

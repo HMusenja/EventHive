@@ -6,6 +6,7 @@ import {
   createTicket,
   updateTicket,
   deleteTicket,
+  getMyTickets,
 } from "../controllers/tickets.controller.js";
 
 const router = express.Router();
@@ -18,6 +19,7 @@ router.post("/events/:eventId", checkToken, requireEventRole("organizer"), creat
 
 router.put("/:id", checkToken, requireEventRole("organizer"), updateTicket);
 router.delete("/:id", checkToken, requireEventRole("organizer"), deleteTicket);
+router.get("/mine", checkToken, getMyTickets);
 
 export default router;
 

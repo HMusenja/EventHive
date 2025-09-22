@@ -21,7 +21,7 @@ export default function AuthModal({
   onClose,
   initialMode = "login", // "login" | "register"
 }) {
-  const { login, register, loading, error } = useAuth();
+  const { login, register, loading, error,fetchUser } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -108,11 +108,9 @@ export default function AuthModal({
             title: "Welcome back!",
             description: res.message || "Signed in.",
           });
-
-          // Redirect logic
-          const target = nextParam ? nextParam : "/account/profile"; // Always go to /profile and let Profile.jsx choose the pane
-
-          navigate(target, { replace: true });
+          // ✅ wait for context to update before navigating
+          await fetchUser();
+          navigate(nextParam || "/account/profile", { replace: true });
           onClose?.(false);
         } else {
           setLocalError(res?.error?.message || "Invalid credentials.");

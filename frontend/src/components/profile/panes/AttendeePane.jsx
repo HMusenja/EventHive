@@ -1,5 +1,11 @@
-import { useEffect, useMemo, useCallback } from "react";
-import { Card, CardHeader, CardContent, CardTitle, CardDescription } from "@/components/ui/card";
+import { useEffect, useMemo, useCallback, useRef, useState } from "react";
+import {
+  Card,
+  CardHeader,
+  CardContent,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,7 +22,15 @@ import { useAuth } from "@/context/AuthContext";
 import RequestMeetingButton from "@/components/meetings/RequestMeetingButton";
 
 export default function AttendeePane({ user }) {
-  const { state, attendee, interests, loadMyAttendee, saveMyAttendee, addInterest, removeInterestAt } = useAttendee();
+  const {
+    state,
+    attendee,
+    interests,
+    loadMyAttendee,
+    saveMyAttendee,
+    addInterest,
+    removeInterestAt,
+  } = useAttendee();
   const { toast } = useToast();
   const auth = useAuth();
   const meId = auth?.user?._id;
@@ -44,35 +58,106 @@ export default function AttendeePane({ user }) {
 
   const initials = useMemo(() => {
     const n = (view.name || "").trim();
-    return n ? n.split(" ").map((x) => x[0]).join("").toUpperCase().slice(0, 2) : "U";
+    return n
+      ? n
+          .split(" ")
+          .map((x) => x[0])
+          .join("")
+          .toUpperCase()
+          .slice(0, 2)
+      : "U";
   }, [view.name]);
+
+  // ---------- Local draft + debounced save (onBlur) ----------
+  const [draft, setDraft] = useState({
+    bio: view.bio,
+    location: view.location,
+    education: view.education,
+  });
+
+  // keep draft in sync when attendee loads/changes
+  useEffect(() => {
+    setDraft({
+      bio: view.bio,
+      location: view.location,
+      education: view.education,
+    });
+  }, [view.bio, view.location, view.education]);
+
+  function useDebounce(fn, delay = 600) {
+    const t = useRef();
+    return useCallback(
+      (...args) => {
+        clearTimeout(t.current);
+        t.current = setTimeout(() => fn(...args), delay);
+      },
+      [fn, delay]
+    );
+  }
+
+  const debouncedSave = useDebounce(async (patch) => {
+    try {
+      await saveMyAttendee(patch);
+    } catch (err) {
+      // optional: surface server-side validation
+      const data = err?.response?.data;
+      console.warn("[AttendeePane] save error:", data);
+      if (data?.details) {
+        // Mongoose-style: details = { bio: { message }, interests: { message }, ... }
+        Object.entries(data.details).forEach(([path, info]) => {
+          console.warn(`Invalid "${path}":`, info?.message);
+        });
+      }
+    }
+  }, 600);
+
+  const handleBlurSave = (key) => {
+    const val = draft[key];
+    debouncedSave({ [key]: val });
+  };
 
   const onSave = async () => {
     try {
       await saveMyAttendee({
-        bio: view.bio,
-        location: view.location,
-        education: view.education,
+        bio: draft.bio,
+        location: draft.location,
+        education: draft.education,
         interests: view.interests,
       });
-      toast({ title: "Profile saved", description: "Your attendee profile is up to date." });
+      toast({
+        title: "Profile saved",
+        description: "Your attendee profile is up to date.",
+      });
     } catch {
-      toast({ title: "Save failed", description: "Please try again.", variant: "destructive" });
+      toast({
+        title: "Save failed",
+        description: "Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
-  const onAdd = useCallback((field, v) => field === "interests" && addInterest(v, 10), [addInterest]);
-  const onRemoveAt = useCallback((field, i) => field === "interests" && removeInterestAt(i), [removeInterestAt]);
+  const onAdd = useCallback(
+    (field, v) => field === "interests" && addInterest(v, 10),
+    [addInterest]
+  );
+  const onRemoveAt = useCallback(
+    (field, i) => field === "interests" && removeInterestAt(i),
+    [removeInterestAt]
+  );
 
   return (
     <div className="space-y-8">
-      <ProfileHeader title="My Attendee Profile" subtitle="Tell others about yourself and choose interests for better matches." />
+      <ProfileHeader
+        title="My Attendee Profile"
+        subtitle="Tell others about yourself and choose interests for better matches."
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-1">
           <AvatarCard
             name={view.name}
-            location={view.location}
+            location={draft.location}
             avatarUrl={view.avatar}
             initials={initials}
             extras={
@@ -80,18 +165,22 @@ export default function AttendeePane({ user }) {
                 {(view.role || view.company) && (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Briefcase className="h-4 w-4" />
-                    <span>{[view.role, view.company].filter(Boolean).join(" at ")}</span>
+                    <span>
+                      {[view.role, view.company].filter(Boolean).join(" at ")}
+                    </span>
                   </div>
                 )}
-                {view.education && (
+                {draft.education && (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <GraduationCap className="h-4 w-4" />
-                    <span>{view.education}</span>
+                    <span>{draft.education}</span>
                   </div>
                 )}
                 <Separator />
                 <p className="text-sm text-left">
+
                   {view.bio || "Write a short bio so people can discover you."}
+
                 </p>
               </>
             }
@@ -109,7 +198,9 @@ export default function AttendeePane({ user }) {
           <Card>
             <CardHeader>
               <CardTitle>Personal Information</CardTitle>
-              <CardDescription>Update your attendee profile information</CardDescription>
+              <CardDescription>
+                Update your attendee profile information
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -126,20 +217,43 @@ export default function AttendeePane({ user }) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Location</Label>
-                  <Input value={view.location} onChange={(e) => saveMyAttendee({ location: e.target.value })} />
+                  <Input
+                    value={draft.location}
+                    onChange={(e) =>
+                      setDraft((d) => ({ ...d, location: e.target.value }))
+                    }
+                    // onBlur={undifined}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Education (optional)</Label>
-                  <Input value={view.education} onChange={(e) => saveMyAttendee({ education: e.target.value })} />
+                  <Input
+                    value={draft.education}
+                    onChange={(e) =>
+                      setDraft((d) => ({ ...d, education: e.target.value }))
+                    }
+                    // onBlur={undefined}
+                  />
                 </div>
               </div>
 
               <div className="space-y-2">
                 <Label>Bio</Label>
-                <Textarea rows={4} value={view.bio} onChange={(e) => saveMyAttendee({ bio: e.target.value })} />
+                <Textarea
+                  rows={4}
+                  value={draft.bio}
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, bio: e.target.value }))
+                  }
+                  // onBlur={undefined}
+                />
               </div>
 
-              <Button className="w-full bg-gradient-to-r from-primary to-secondary" disabled={state.saving} onClick={onSave}>
+              <Button
+                className="w-full bg-gradient-to-r from-primary to-secondary"
+                disabled={state.saving}
+                onClick={onSave}
+              >
                 {state.saving ? "Saving…" : "Save Changes"}
               </Button>
             </CardContent>
