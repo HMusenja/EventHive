@@ -1,6 +1,6 @@
 // src/pages/dashboard/organizer/Events.jsx
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState, useRef } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   Calendar as CalendarIcon,
   Users,
@@ -28,6 +28,7 @@ import {
 import EventCard from "@/components/event/EventCard";
 import { useEvents } from "@/context/EventContext";
 import EditEventModal from "@/components/event/EditEventModal";
+import CreateEventModal from "@/components/event/CreateEventModal";
 
 function pickStatus(ev) {
   return (
@@ -47,6 +48,10 @@ function money(n, currency = "EUR") {
 
 export default function OrganizerEventsPane() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [creating, setCreating] = useState(false);
+  const createdId = location.state?.createdId; // passed from CreateEventModal
+
   const {
     state: { events, loading, error },
     fetchMyEvents,
@@ -54,6 +59,9 @@ export default function OrganizerEventsPane() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+
+  // map of refs to wrapper nodes so we can scroll/highlight the new card
+  const itemRefs = useRef({}); // { [id]: HTMLElement }
 
   // per-event metrics from attendee/ticket API
   // shape: { [eventId]: { attendeeCount, capacityTotal, minTicketPrice, totalRevenue, currency, checkedInCount, memberCount } }
@@ -163,6 +171,23 @@ export default function OrganizerEventsPane() {
     console.log("[delete] not wired yet →", ev?._id);
   };
 
+  // 🔔 Highlight & scroll the newly-created event into view
+  useEffect(() => {
+    if (!createdId || !filteredEvents.length) return;
+
+    const el = itemRefs.current[String(createdId)];
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add("flash-highlight");
+      const t = setTimeout(() => el.classList.remove("flash-highlight"), 2000);
+
+      // clear state so it doesn't trigger again on back/forward
+      window.history.replaceState({}, document.title, window.location.pathname);
+
+      return () => clearTimeout(t);
+    }
+  }, [createdId, filteredEvents]);
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -181,7 +206,7 @@ export default function OrganizerEventsPane() {
           </Button>
           <Button
             className="bg-gradient-to-r from-primary to-secondary"
-            onClick={() => navigate("/dashboard/organizer/events/new")}
+            onClick={() => setCreating(true)}
           >
             <Plus className="h-4 w-4 mr-2" />
             Create New Event
@@ -288,16 +313,24 @@ export default function OrganizerEventsPane() {
         </div>
       ) : filteredEvents.length ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredEvents.map((ev) => (
-            <EventCard
-              key={ev._id || ev.slug}
-              variant="organizer"
-              event={ev}
-              onView={handleView}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-            />
-          ))}
+          {filteredEvents.map((ev) => {
+            const id = String(ev?._id || "");
+            return (
+              <div
+                key={id || ev.slug}
+                ref={(node) => (itemRefs.current[id] = node)}
+                className="rounded-2xl transition-shadow"
+              >
+                <EventCard
+                  variant="organizer"
+                  event={ev}
+                  onView={handleView}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                />
+              </div>
+            );
+          })}
         </div>
       ) : (
         <div className="text-center py-12">
@@ -317,6 +350,7 @@ export default function OrganizerEventsPane() {
           </Button>
         </div>
       )}
+
       <EditEventModal
         open={!!editing}
         event={editing}
@@ -324,6 +358,8 @@ export default function OrganizerEventsPane() {
           if (!isOpen) handleCloseEdit();
         }}
       />
+      <CreateEventModal open={creating} onOpenChange={setCreating} />
+
     </div>
   );
 }

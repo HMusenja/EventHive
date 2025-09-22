@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useReducer } from "react";
-import { getAllEvents, getMyOrganizing, updateEvent as apiUpdateEvent  } from "@/api/eventsApi";
+import { getAllEvents, getMyOrganizing, updateEvent as apiUpdateEvent,  createEvent as apiCreateEvent,  } from "@/api/eventsApi";
 
 const EventContext = createContext(null);
 
@@ -10,6 +10,8 @@ const initialState = {
   lastFetchedAt: null,
   updating: false,
   updateError: "",
+  creating: false, 
+     createError: "", 
 };
 
 function upsert(events, updated) {
@@ -38,6 +40,13 @@ function reducer(state, action) {
       return { ...state, updating: false, events: upsert(state.events, action.payload) };
     case "UPDATE_ERROR":
       return { ...state, updating: false, updateError: action.error };
+    case "CREATE_START":
+      return { ...state, creating: true, createError: "" };
+    case "CREATE_SUCCESS":
+      return { ...state, creating: false, events: upsert(state.events, action.payload) };
+    case "CREATE_ERROR":
+      return { ...state, creating: false, createError: action.error };
+
     default:
       return state;
   }
@@ -102,11 +111,22 @@ export function EventProvider({ children, autoLoad = true }) {
       throw e;
     }
   }
+   async function createEvent(payload) {
+    try {
+      dispatch({ type: "CREATE_START" });
+      const created = await apiCreateEvent(payload);
+      dispatch({ type: "CREATE_SUCCESS", payload: created });
+      return created;
+    } catch (e) {
+      dispatch({ type: "CREATE_ERROR", error: e?.message || "Failed to create event" });
+      throw e;
+    }
+  }
 
   useEffect(() => {
     if (autoLoad) fetchEvents();
   }, [autoLoad]);
 
-  const value = { state, fetchEvents, fetchMyEvents,updateEvent };
+  const value = { state, fetchEvents, fetchMyEvents,updateEvent, createEvent, };
   return <EventContext.Provider value={value}>{children}</EventContext.Provider>;
 }

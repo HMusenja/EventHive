@@ -20,7 +20,6 @@ const router = Router();
 router.get("/", getAllEvents);
 router.get("/:eventId/attendees/count", getEventAttendeeCount);
 
-
 // Protected
 router.post("/", checkToken, createEvent);
 router.get("/me/organizing", checkToken, getMyOrganizing);
@@ -30,10 +29,10 @@ router.get("/:id", getEvent);
 router.get(
   "/:eventId/dashboard/stats",
   checkToken,
-  requireEventRole(["organizer","staff"]),
+  requireEventRole(["organizer", "staff"]),
   getEventDashboardStats
 );
 router.put("/:eventId/organizer-profile", checkToken, updateOrganizerProfile);
-export default router;
-
 router.patch("/:id", checkToken, updateEvent);
+
+export default router;
