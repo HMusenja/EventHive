@@ -33,7 +33,11 @@ export default function GlobalChatButton() {
     return (
         <Link
             to="/chat/global"
-            className="relative inline-flex items-center gap-2 rounded-xl border px-3 py-2 hover:bg-muted transition"
+            className={`
+                relative inline-flex items-center gap-2 rounded-xl border px-3 py-2
+                hover:bg-muted transition
+                ${unread > 0 ? "animate-bounce" : ""}
+            `}
             title="Global chat"
         >
             <MessageSquareText className="h-5 w-5" />

@@ -1,4 +1,3 @@
-// backend/src/routes/eventRoutes.js
 import { Router } from "express";
 import {
   getEvent,

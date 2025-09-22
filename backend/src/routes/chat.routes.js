@@ -1,4 +1,4 @@
-import express from "express";
+import { Router } from "express";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import {
     listEventMessages,
@@ -7,14 +7,20 @@ import {
     createGlobalMessage,
 } from "../controllers/chat.controller.js";
 
-const router = express.Router();
+const router = Router();
 
-// Global chat (eventId === null)
-router.get("/chat/global/messages", authMiddleware, listGlobalMessages);
-router.post("/chat/global/messages", authMiddleware, createGlobalMessage);
+/**
+ * Require authentication for ALL chat endpoints.
+ * Guests will get 401 from authMiddleware.
+ */
+router.use(authMiddleware);
 
-// Event chat (by :eventId or slug)
-router.get("/events/:eventId/messages", authMiddleware, listEventMessages);
-router.post("/events/:eventId/messages", authMiddleware, createEventMessage);
+// ----- Global chat -----
+router.get("/chat/global/messages", listGlobalMessages);
+router.post("/chat/global/messages", createGlobalMessage);
+
+// ----- Event chat (ID or slug in :eventId) -----
+router.get("/events/:eventId/messages", listEventMessages);
+router.post("/events/:eventId/messages", createEventMessage);
 
 export default router;

@@ -4,13 +4,25 @@ import User from "../models/User.js";
 
 function pickTokenFromHandshake(socket) {
     const hdr = socket.handshake.headers || {};
-    const fromCookie = cookie.parse(hdr.cookie || "").token;               // <- cookie first
-    const fromAuth = socket.handshake.auth?.token;
-    const fromAuthTrimmed = typeof fromAuth === "string"
-        ? fromAuth.replace(/^Bearer\s+/i, "")
-        : "";
-    const fromBearer = (hdr.authorization || "").replace(/^Bearer\s+/i, "");
-    return fromCookie || fromAuthTrimmed || fromBearer || "";
+    const cookies = cookie.parse(hdr.cookie || "");
+
+    // Try multiple common cookie names
+    const cookieToken =
+        cookies.token ||
+        cookies.jwt ||
+        cookies.accessToken ||
+        cookies.authToken ||
+        "";
+
+    // Allow handshake.auth.token and Authorization: Bearer
+    const authToken =
+        typeof socket.handshake.auth?.token === "string"
+            ? socket.handshake.auth.token.replace(/^Bearer\s+/i, "")
+            : "";
+
+    const bearer = (hdr.authorization || "").replace(/^Bearer\s+/i, "");
+
+    return cookieToken || authToken || bearer || "";
 }
 
 export async function socketAuth(socket, next) {
@@ -34,9 +46,10 @@ export async function socketAuth(socket, next) {
             role: user.role,
             isAdmin: !!user.isAdmin,
         };
+
         next();
     } catch (err) {
-        console.error("Socket auth error:", err.message);
+        console.error("Socket auth error:", err?.message || err);
         next(new Error("Unauthorized"));
     }
 }

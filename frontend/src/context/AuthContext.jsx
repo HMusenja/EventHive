@@ -1,3 +1,5 @@
+
+
 import { createContext, useReducer, useContext, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { authReducer } from "../reducers/authReducer";
@@ -8,7 +10,9 @@ import {
   logoutUser,
 } from "../api/authApi";
 import { getMyOrganizing } from "@/api/eventsApi";
+import { refreshSocketAuth } from "@/lib/socket";
 import { useToast } from "@/hooks/use-toast";
+
 
 const AuthContext = createContext();
 
@@ -26,10 +30,17 @@ async function attachOrganizerFlag(user) {
   try {
     const data = await getMyOrganizing();
     const events = Array.isArray(data) ? data : data?.events || [];
-    return { ...user, isOrganizer: events.length > 0 };
+
+    const isOrganizer = events.length > 0;
+    return { ...user, isOrganizer };
   } catch (err) {
-    console.warn("[AuthContext] Failed to attach organizer flag:", err.message);
-    return { ...user, isOrganizer: false };
+    console.warn("[AuthContext] organizer check failed:", err?.message || err);
+
+  //  return { ...user, isOrganizer: events.length > 0 };
+  //} catch (err) {
+    //console.warn("[AuthContext] Failed to attach organizer flag:", err.message);
+
+   // return { ...user, isOrganizer: false };
   }
 }
 
@@ -38,69 +49,136 @@ export const AuthProvider = ({ children }) => {
   const { toast } = useToast();
   const [state, dispatch] = useReducer(authReducer, initialState);
 
-  // Fetch current user on app load
+
+  // ----- Fetch current user on app load -----
   const fetchUser = async () => {
     try {
       dispatch({ type: "AUTH_LOADING" });
-      const res = await getCurrentUser();
-      const rawUser = res.data?.user;
+      const res = await getCurrentUser(); // expects { data: { user } }
+      const rawUser = res?.data?.user || null;
+
+      if (!rawUser) {
+        dispatch({ type: "AUTH_LOGOUT" });
+        refreshSocketAuth({ force: true });
+        return { ok: false };
+      }
+
+
+  // Fetch current user on app load
+  //////const fetchUser = async () => {
+   ////// try {
+     //// dispatch({ type: "AUTH_LOADING" });
+      //const res = await getCurrentUser();
+     //const rawUser = res.data?.user;
+
       const userWithFlag = await attachOrganizerFlag(rawUser);
 
       dispatch({ type: "AUTH_SUCCESS", payload: userWithFlag });
+
+      // ensure socket carries the *current* auth (cookie/JWT)
+      refreshSocketAuth({ force: true });
+
       return { ok: true, user: userWithFlag };
     } catch (error) {
-      if (error.response?.status === 401) {
+      if (error?.response?.status === 401) {
         console.log("[AuthContext] Not authenticated (401)");
       } else {
-        console.warn("[AuthContext] Error fetching user:", error.message);
+        console.warn("[AuthContext] fetchUser error:", error?.message || error);
       }
       dispatch({ type: "AUTH_LOGOUT" });
-      return { ok: false, message: error.message };
+      refreshSocketAuth({ force: true }); // drop any stale socket auth
+      return { ok: false, message: error?.message };
     }
   };
 
-  // Run only once on mount
+
   useEffect(() => {
     if (!state.loaded) fetchUser();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Login
+  // ----- Login -----
+
+
+
   const login = async ({ identifier, password }) => {
     try {
       dispatch({ type: "AUTH_LOADING" });
       const res = await loginUser({ identifier, password });
-      const rawUser = res.data?.user;
 
+
+      // If your API returns a JWT, persist it (optional; safe no-op if undefined)
+      const token = res?.data?.token;
+      if (token) {
+        try {
+          localStorage.setItem("token", token);
+        } catch { }
+      }
+
+      const rawUser = res?.data?.user;
       const userWithFlag = await attachOrganizerFlag(rawUser);
+
       dispatch({ type: "AUTH_SUCCESS", payload: userWithFlag });
+      refreshSocketAuth({ force: true }); // re-auth socket to new user
 
       return { ok: true, user: userWithFlag };
     } catch (error) {
+      console.error(
+        "[AuthContext] Login failed:",
+        error?.response?.data?.message || error?.message
+      );
+
+     // const userWithFlag = await attachOrganizerFlag(rawUser);
+      //dispatch({ type: "AUTH_SUCCESS", payload: userWithFlag });
+
+    //  return { ok: true, user: userWithFlag };
+   // } catch (error) {
+
       dispatch({
         type: "AUTH_ERROR",
-        payload: error.response?.data?.message || "Login failed",
+        payload: error?.response?.data?.message || "Login failed",
       });
       throw error;
     }
   };
 
-  // Register
+
+  // ----- Register -----
+
   const register = async (userData) => {
     try {
       dispatch({ type: "AUTH_LOADING" });
       const res = await registerUser(userData);
-      const rawUser = res.data?.user;
+
+      // Optional JWT sync
+      const token = res?.data?.token;
+      if (token) {
+        try {
+          localStorage.setItem("token", token);
+        } catch { }
+      }
+
+      const rawUser = res?.data?.user;
       const userWithFlag = await attachOrganizerFlag(rawUser);
+
       dispatch({ type: "AUTH_SUCCESS", payload: userWithFlag });
+      refreshSocketAuth({ force: true }); // re-auth socket to new user
+
       return { ok: true, user: userWithFlag };
     } catch (error) {
-      dispatch({
+
+      console.error(
+        "[AuthContext] Registration failed:",
+        error?.response?.data?.message || error?.message
+      );
+dispatch({
         type: "AUTH_ERROR",
-        payload: error.response?.data?.message || "Registration failed",
+        payload: error?.response?.data?.message || "Registration failed",
       });
       throw error;
     }
   };
+
 
   // Logout
   const logout = async () => {
@@ -112,19 +190,31 @@ export const AuthProvider = ({ children }) => {
         description: "You have been successfully logged out.",
       });
       navigate("/");
+
     } catch (err) {
-      console.error("[AuthContext] Logout failed:", err.message);
+      console.error("[AuthContext] Logout request failed:", err?.message || err);
+      // continue with local cleanup regardless
     }
+    dispatch({ type: "AUTH_LOGOUT" });
+    try {
+      localStorage.removeItem("token");
+    } catch { }
+    refreshSocketAuth({ force: true }); // drop auth + reconnect socket
   };
 
   return (
     <AuthContext.Provider
       value={{
         ...state,
+
+        authDispatch: dispatch,
+        fetchUser,
+        refreshMe: fetchUser,
         login,
         register,
+        registerLite,
         logout,
-        fetchUser,
+
       }}
     >
       {children}
@@ -135,8 +225,22 @@ export const AuthProvider = ({ children }) => {
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    console.warn("[useAuth] Tried to use AuthContext outside its provider.");
-    return { user: null, isAuthenticated: false, loading: true, logout: () => {} };
+
+    console.warn("[useAuth] Used outside provider.");
+    return {
+      ...initialState,
+      authDispatch: () => { },
+      fetchUser: async () => ({ ok: false }),
+      refreshMe: async () => ({ ok: false }),
+      login: async () => ({ ok: false }),
+      register: async () => ({ ok: false }),
+      registerLite: async () => ({}),
+      logout: async () => { },
+    };
+
+   // console.warn("[useAuth] Tried to use AuthContext outside its provider.");
+  //  return { user: null, isAuthenticated: false, loading: true, logout: () => {} };
+
   }
   return context;
 };

@@ -148,182 +148,158 @@ export default function AuthModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="glass-effect border border-white/20 bg-gradient-to-br from-primary/5 to-secondary/5 backdrop-blur-xl max-w-md">
-        <DialogHeader className="space-y-4">
-          <div className="flex justify-center">
-            <div className="p-3 rounded-xl bg-primary/10 backdrop-blur-sm">
-              <Cloud className="h-8 w-8 text-primary" />
-            </div>
+      <DialogContent
+        className="
+      auth-dialog
+      max-w-md p-0 overflow-hidden rounded-2xl
+      bg-white/90 supports-[backdrop-filter]:bg-white/75 backdrop-blur-2xl
+      border border-white/60 shadow-[0_12px_40px_-10px_rgba(0,0,0,0.25)]
+    "
+      >
+        <div className="p-6 sm:p-8">
+          {/* Logo tile */}
+          <div className="mx-auto mb-4 w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500/10 to-fuchsia-500/10 ring-1 ring-white/40 flex items-center justify-center">
+            <Cloud className="h-7 w-7 text-indigo-600" />
           </div>
-          <DialogTitle className="text-center text-2xl font-bold text-foreground">
+
+          {/* Title + tagline */}
+          <h2 className="text-center text-2xl font-semibold tracking-tight">
             {isLogin ? "Welcome Back" : "Create Account"}
-          </DialogTitle>
-          <DialogDescription className="text-center text-muted-foreground text-sm">
+          </h2>
+          <p className="mt-1 text-center text-sm text-slate-600">
             {isLogin
-              ? "Sign in to access your builder & saved resumes."
-              : "Join ResumeHub to build and manage your CVs."}
-          </DialogDescription>
-        </DialogHeader>
+              ? "Sign in to manage events, tickets, and chats."
+              : "Join EventHive to host, attend, and connect."}
+          </p>
 
-        <form onSubmit={handleSubmit} className="space-y-4 mt-6">
-          {!isLogin && (
-            <>
-              <div className="space-y-2">
-                <Label
-                  htmlFor="fullName"
-                  className="text-sm font-medium text-foreground"
-                >
-                  Full Name
-                </Label>
-                <div className="relative">
-                  <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="fullName"
-                    value={formData.fullName}
-                    onChange={(e) =>
-                      handleInputChange("fullName", e.target.value)
-                    }
-                    placeholder="Enter your full name"
-                    className="pl-10 glass-input"
-                    required
-                  />
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+            {!isLogin && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="fullName">Full Name</Label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
+                    <Input
+                      id="fullName"
+                      value={formData.fullName}
+                      onChange={(e) => handleInputChange("fullName", e.target.value)}
+                      placeholder="Enter your full name"
+                      className="pl-10 bg-white/90 border border-white/60 focus:bg-white focus-visible:ring-2 focus-visible:ring-indigo-400/40 placeholder:text-slate-500"
+                      required
+                    />
+                  </div>
                 </div>
-              </div>
 
-              <div className="space-y-2 mt-4">
-                <Label
-                  htmlFor="username"
-                  className="text-sm font-medium text-foreground"
-                >
-                  Username
-                </Label>
-                <div className="relative">
-                  <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="username"
-                    value={formData.username}
-                    onChange={(e) =>
-                      handleInputChange("username", e.target.value)
-                    }
-                    placeholder="Choose a username"
-                    className="pl-10 glass-input"
-                    required
-                  />
+                <div className="space-y-2">
+                  <Label htmlFor="username">Username</Label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
+                    <Input
+                      id="username"
+                      value={formData.username}
+                      onChange={(e) => handleInputChange("username", e.target.value)}
+                      placeholder="Choose a username"
+                      className="pl-10 bg-white/90 border border-white/60 focus:bg-white focus-visible:ring-2 focus-visible:ring-indigo-400/40 placeholder:text-slate-500"
+                      required
+                    />
+                  </div>
                 </div>
+              </>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="identifier">Email</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
+                <Input
+                  id="identifier"
+                  ref={identifierRef}
+                  type="email"
+                  placeholder="Enter your email"
+                  value={isLogin ? formData.emailOrUsername : formData.email}
+                  onChange={(e) =>
+                    isLogin
+                      ? handleInputChange("emailOrUsername", e.target.value)
+                      : handleInputChange("email", e.target.value)
+                  }
+                  className="pl-10 bg-white/90 border border-white/60 focus:bg-white focus-visible:ring-2 focus-visible:ring-indigo-400/40 placeholder:text-slate-500"
+                  required
+                />
               </div>
-            </>
-          )}
+            </div>
 
-          <div className="space-y-2">
-            <Label
-              htmlFor="identifier"
-              className="text-sm font-medium text-foreground"
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Enter your password"
+                  value={formData.password}
+                  onChange={(e) => handleInputChange("password", e.target.value)}
+                  className="pl-10 pr-10 bg-white/90 border border-white/60 focus:bg-white focus-visible:ring-2 focus-visible:ring-indigo-400/40 placeholder:text-slate-500"
+                  required
+                  autoComplete={isLogin ? "current-password" : "new-password"}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                  onClick={() => setShowPassword((s) => !s)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4 text-slate-500" /> : <Eye className="h-4 w-4 text-slate-500" />}
+                </Button>
+              </div>
+            </div>
+
+            {isLogin && (
+              <div className="flex justify-end -mt-1">
+                <Button type="button" variant="link" className="text-sm p-0 text-indigo-600 hover:text-indigo-600/80">
+                  Forgot password?
+                </Button>
+              </div>
+            )}
+
+            {(localError || error?.message) && (
+              <p className="text-sm text-destructive">{localError || error.message}</p>
+            )}
+
+            <Button
+              type="submit"
+              disabled={!canSubmit || loading}
+              className="
+            w-full rounded-xl
+            bg-gradient-to-tr from-indigo-600 to-fuchsia-600
+            hover:from-indigo-600/90 hover:to-fuchsia-600/90
+            text-white font-medium py-2.5
+            shadow-md hover:shadow-lg transition-all
+            disabled:opacity-60
+          "
             >
-              Email
-            </Label>
-            <div className="relative">
-              <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input
-                id="identifier"
-                ref={identifierRef}
-                type="email"
-                placeholder="Enter your email"
-                value={isLogin ? formData.emailOrUsername : formData.email}
-                onChange={(e) =>
-                  isLogin
-                    ? handleInputChange("emailOrUsername", e.target.value)
-                    : handleInputChange("email", e.target.value)
-                }
-                className="pl-10 glass-input"
-                required
-              />
-            </div>
-          </div>
+              {loading ? (isLogin ? "Signing in..." : "Creating account...") : isLogin ? "Sign In" : "Create Account"}
+            </Button>
 
-          <div className="space-y-2">
-            <Label
-              htmlFor="password"
-              className="text-sm font-medium text-foreground"
+            <div className="relative my-6">
+              <Separator className="bg-slate-200/70" />
+              <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white/85 px-2 text-xs text-slate-600 rounded">
+                {isLogin ? "Don't have an account?" : "Already have an account?"}
+              </span>
+            </div>
+
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full rounded-xl text-indigo-700 hover:text-indigo-700/90 hover:bg-indigo-50/60"
+              onClick={() => switchMode(isLogin ? "register" : "login")}
             >
-              Password
-            </Label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input
-                id="password"
-                type={showPassword ? "text" : "password"}
-                placeholder="Enter your password"
-                value={formData.password}
-                onChange={(e) => handleInputChange("password", e.target.value)}
-                className="pl-10 pr-10 glass-input"
-                required
-                autoComplete={isLogin ? "current-password" : "new-password"}
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                onClick={() => setShowPassword((s) => !s)}
-                aria-label={showPassword ? "Hide password" : "Show password"}
-              >
-                {showPassword ? (
-                  <EyeOff className="h-4 w-4 text-muted-foreground" />
-                ) : (
-                  <Eye className="h-4 w-4 text-muted-foreground" />
-                )}
-              </Button>
-            </div>
-          </div>
-
-          {isLogin && (
-            <div className="flex justify-end">
-              <Button
-                type="button"
-                variant="link"
-                className="text-sm text-primary hover:text-primary/80 p-0"
-              >
-                Forgot password?
-              </Button>
-            </div>
-          )}
-
-          {(localError || error?.message) && (
-            <p className="text-sm text-destructive">
-              {localError || error.message}
-            </p>
-          )}
-
-          <Button
-            type="submit"
-            disabled={!canSubmit || loading}
-            className="w-full bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 text-white font-medium py-2.5 transition-all duration-200 disabled:opacity-60"
-          >
-            {loading
-              ? isLogin
-                ? "Signing in..."
-                : "Creating account..."
-              : isLogin
-                ? "Sign In"
-                : "Create Account"}
-          </Button>
-
-          <div className="relative my-6">
-            <Separator className="bg-white/20" />
-            <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-background px-2 text-xs text-muted-foreground">
-              {isLogin ? "Don't have an account?" : "Already have an account?"}
-            </span>
-          </div>
-
-          <Button
-            type="button"
-            variant="ghost"
-            className="w-full text-primary hover:text-primary/80 hover:bg-primary/5"
-            onClick={() => switchMode(isLogin ? "register" : "login")}
-          >
-            {isLogin ? "Create new account" : "Sign in instead"}
-          </Button>
-        </form>
+              {isLogin ? "Create new account" : "Sign in instead"}
+            </Button>
+          </form>
+        </div>
       </DialogContent>
     </Dialog>
   );

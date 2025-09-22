@@ -1,31 +1,49 @@
 import Message from "../models/Message.js";
+// If you want to *strictly* allow only existing events, you can import Event and check existence.
+// import Event from "../models/Event.js";
+
+const MAX_LEN = 2000;
 
 export function setupSocketHandlers(io, socket) {
+    if (!socket.user?._id) {
+        // Shouldn’t happen if socketAuth is wired, but double-guard
+        return socket.disconnect(true);
+    }
+
     const userId = String(socket.user._id);
     const senderLabel = socket.user.fullName || socket.user.username || "Anon";
 
-    // Personal room + global (and forum for legacy)
+    // Always join a personal room for DMs/notifications
     socket.join(userId);
-    socket.join("global");
-    socket.join("forum"); // keep if older clients still use forum_message
 
     /* ---------- Room membership ---------- */
     socket.on("join_room", (room) => {
-        if (!room) return;
-        socket.join(String(room));
+        const r = String(room || "").trim();
+        if (!r) return;
+        socket.join(r);
     });
 
     socket.on("leave_room", (room) => {
-        if (!room) return;
-        socket.leave(String(room));
+        const r = String(room || "").trim();
+        if (!r) return;
+        socket.leave(r);
     });
 
     /* ---------- Unified room message: chat_message ---------- */
     socket.on("chat_message", async ({ room, text }, ack) => {
         try {
-            const roomName = String(room || "").trim(); // "global" or eventId
-            const body = String(text || "").trim();
+            const roomName = String(room || "").trim(); // "global" or eventId/slug
+            let body = String(text || "").trim();
             if (!roomName || !body) return typeof ack === "function" && ack({ error: "bad_request" });
+
+            // Trim & cap length
+            if (body.length > MAX_LEN) body = body.slice(0, MAX_LEN);
+
+            // OPTIONALLY validate event access:
+            // if (roomName !== "global") {
+            //   const exists = await Event.exists({ _id: roomName });
+            //   if (!exists) return typeof ack === "function" && ack({ error: "not_found" });
+            // }
 
             const eventId = roomName === "global" ? null : roomName;
 
@@ -33,27 +51,34 @@ export function setupSocketHandlers(io, socket) {
             const payload = {
                 _id: String(msg._id),
                 text: body,
-                sender: senderLabel,       // string label works with your labelFor()
+                sender: {
+                    _id: userId,
+                    fullName: socket.user.fullName,
+                    username: socket.user.username,
+                }, // client’s labelFor() accepts string or object
                 createdAt: msg.createdAt,
                 room: roomName,
             };
 
-            // ACK only to sender (so client can replace its optimistic message)
+            // ACK to sender so client replaces its optimistic "tmp" message
             if (typeof ack === "function") ack(payload);
 
-            // Broadcast to everyone else in the room (not the sender)
+            // Broadcast to everyone else in the room (NOT the sender)
+            // (Your client uses the ack to replace its own tmp; no double-insert)
             socket.to(roomName).emit("chat_message", payload);
         } catch (e) {
             if (typeof ack === "function") ack({ error: "failed" });
         }
     });
 
-    /* ---------- Legacy per-event message (kept for compatibility) ---------- */
+    /* ---------- Legacy handlers (optional) ---------- */
+    // Keep only if you still have old clients using these events.
     socket.on("event_message", async ({ eventId, text }, ack) => {
         try {
             const room = String(eventId || "").trim();
-            const body = String(text || "").trim();
+            let body = String(text || "").trim();
             if (!room || !body) return typeof ack === "function" && ack({ error: "bad_request" });
+            if (body.length > MAX_LEN) body = body.slice(0, MAX_LEN);
 
             const msg = await Message.create({ sender: userId, text: body, eventId: room });
             const payload = {
@@ -64,17 +89,18 @@ export function setupSocketHandlers(io, socket) {
                 room,
             };
 
-            if (typeof ack === "function") ack(payload);   // to sender only
-            socket.to(room).emit("event_message", payload); // everyone else
+            if (typeof ack === "function") ack(payload);
+            socket.to(room).emit("event_message", payload);
         } catch (e) {
             if (typeof ack === "function") ack({ error: "failed" });
         }
     });
 
-    /* ---------- Legacy global/forum message (optional) ---------- */
+    // Remove if not needed; leaving here for completeness
     socket.on("forum_message", async ({ text }) => {
-        const body = String(text || "").trim();
+        let body = String(text || "").trim();
         if (!body) return;
+        if (body.length > MAX_LEN) body = body.slice(0, MAX_LEN);
 
         const msg = await Message.create({ sender: userId, text: body, eventId: null });
         const payload = {
@@ -84,18 +110,15 @@ export function setupSocketHandlers(io, socket) {
             createdAt: msg.createdAt,
             room: "forum",
         };
-
-        // forum is legacy; broadcast to that room
         socket.to("forum").emit("forum_message", payload);
-        // optionally: also ACK to sender so old UIs can replace optimistic
-        // (skip if your old client doesn't expect it)
     });
 
     /* ---------- Private DM ---------- */
     socket.on("private_message", async ({ to, text, eventId }) => {
-        const body = String(text || "").trim();
+        let body = String(text || "").trim();
         const toId = String(to || "").trim();
         if (!toId || !body) return;
+        if (body.length > MAX_LEN) body = body.slice(0, MAX_LEN);
 
         const msg = await Message.create({
             sender: userId,

@@ -96,6 +96,7 @@ export default function AppRoutes() {
         {/* Chat hub + global chat */}
         <Route path="/chat" element={<ChatHub />} />
         <Route path="/chat/global" element={<GlobalChat />} />
+        <Route path="/chat/event/:eventId" element={<GlobalChat />} />
         {/* Event chat by slug OR by id */}
         <Route path="/events/:slug/chat" element={<Chat />} />
         <Route path="/events/:eventId/chat" element={<Chat />} />

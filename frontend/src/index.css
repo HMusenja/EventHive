@@ -29,10 +29,10 @@ All colors MUST be HSL.
 
     --accent: 240 4.8% 95.9%;
     --accent-foreground: 240 5.9% 10%;
-    
+
     --vibrant: 45 100% 55%;
     --vibrant-foreground: 0 0% 100%;
-    
+
     --electric: 200 100% 55%;
     --electric-foreground: 0 0% 100%;
 
@@ -43,12 +43,34 @@ All colors MUST be HSL.
     --input: 240 5.9% 90%;
     --ring: 240 10% 3.9%;
 
-    --gradient-primary: linear-gradient(135deg, hsl(280 100% 60%), hsl(300 100% 70%), hsl(340 100% 65%));
-    --gradient-hero: linear-gradient(135deg, hsl(280 100% 15%), hsl(300 100% 25%), hsl(340 100% 20%));
-    --gradient-accent: linear-gradient(90deg, hsl(120 100% 60%), hsl(200 100% 55%));
-    --gradient-vibrant: linear-gradient(45deg, hsl(45 100% 55%), hsl(30 100% 60%));
-    --gradient-electric: linear-gradient(135deg, hsl(200 100% 55%), hsl(240 100% 60%));
-    
+    --gradient-primary: linear-gradient(
+      135deg,
+      hsl(280 100% 60%),
+      hsl(300 100% 70%),
+      hsl(340 100% 65%)
+    );
+    --gradient-hero: linear-gradient(
+      135deg,
+      hsl(280 100% 15%),
+      hsl(300 100% 25%),
+      hsl(340 100% 20%)
+    );
+    --gradient-accent: linear-gradient(
+      90deg,
+      hsl(120 100% 60%),
+      hsl(200 100% 55%)
+    );
+    --gradient-vibrant: linear-gradient(
+      45deg,
+      hsl(45 100% 55%),
+      hsl(30 100% 60%)
+    );
+    --gradient-electric: linear-gradient(
+      135deg,
+      hsl(200 100% 55%),
+      hsl(240 100% 60%)
+    );
+
     --shadow-glow: 0 0 50px hsl(280 100% 60% / 0.4);
     --shadow-elegant: 0 15px 50px -10px hsl(280 100% 60% / 0.3);
     --shadow-vibrant: 0 0 40px hsl(45 100% 55% / 0.4);
@@ -138,16 +160,34 @@ All colors MUST be HSL.
 }
 
 @layer utilities {
-  .bg-gradient-primary { background-image: var(--gradient-primary); }
-  .bg-gradient-hero    { background-image: var(--gradient-hero); }
-  .bg-gradient-accent  { background-image: var(--gradient-accent); }
-  .bg-gradient-vibrant { background-image: var(--gradient-vibrant); }
-  .bg-gradient-electric{ background-image: var(--gradient-electric); }
+  .bg-gradient-primary {
+    background-image: var(--gradient-primary);
+  }
+  .bg-gradient-hero {
+    background-image: var(--gradient-hero);
+  }
+  .bg-gradient-accent {
+    background-image: var(--gradient-accent);
+  }
+  .bg-gradient-vibrant {
+    background-image: var(--gradient-vibrant);
+  }
+  .bg-gradient-electric {
+    background-image: var(--gradient-electric);
+  }
 
-  .shadow-glow     { box-shadow: var(--shadow-glow); }
-  .shadow-elegant  { box-shadow: var(--shadow-elegant); }
-  .shadow-vibrant  { box-shadow: var(--shadow-vibrant); }
-  .shadow-electric { box-shadow: var(--shadow-electric); }
+  .shadow-glow {
+    box-shadow: var(--shadow-glow);
+  }
+  .shadow-elegant {
+    box-shadow: var(--shadow-elegant);
+  }
+  .shadow-vibrant {
+    box-shadow: var(--shadow-vibrant);
+  }
+  .shadow-electric {
+    box-shadow: var(--shadow-electric);
+  }
 }
 /* Glass card + input helpers */
 .glass-effect {
@@ -171,6 +211,22 @@ All colors MUST be HSL.
   @apply text-white/80;
 }
 
+
+/* Animation (button) */
+@layer utilities {
+  @keyframes bounce-subtle {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-2px);
+    }
+  }
+  .animate-bounce-subtle {
+    animation: bounce-subtle 1.2s ease-in-out infinite;
+  }
+
 @keyframes flashRing {
   0%   { box-shadow: 0 0 0 0 rgba(59,130,246,.55); }
   70%  { box-shadow: 0 0 0 10px rgba(59,130,246,0); }
@@ -182,4 +238,5 @@ All colors MUST be HSL.
   outline: 2px solid rgb(59 130 246); /* Tailwind blue-500 */
   outline-offset: 2px;
   border-radius: 1rem; /* match the wrapper/card rounding */
+
 }

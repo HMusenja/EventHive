@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams, useLocation } from "react-router-dom";
+import { useParams, useLocation, Navigate } from "react-router-dom";
 import socket, { connectSocket } from "@/lib/socket";
 import api from "@/lib/axios";
 import { useAuth } from "@/context/AuthContext";
@@ -38,11 +38,19 @@ const isSameDay = (a, b) => {
     );
 };
 
-/* Tiny emoji palette */
-const COMMON_EMOJIS =
-    "😀 😁 😂 🤣 😊 🙂 🙃 😉 😍 😘 🤗 🤩 🤔 😏 😴 😮 😱 😅 😆 😇 🤤 😋 😎 🥳 🤠 😤 😡 😭 😢 🤯 🤬 🙏 🤝 👍 👎 👏 ✨ 🎉 💯 🔥 💡 🧠 🫶 ❤️ 🩷 🧡 💛 💚 💙 💜 🤍 🤎 🖤 ☕ 🍀 🌟 🌈 🌊 🌞 🌙 💫 📎 📌 📨".split(
-        " "
-    );
+// id helpers
+const senderIdOf = (s) =>
+    s && typeof s === "object" && s._id
+        ? String(s._id)
+        : typeof s === "string" && /^[0-9a-f]{24}$/i.test(s)
+            ? s
+            : null;
+
+const isMineFactory = (myId, myLabel) => (msg) => {
+    const sid = msg?.senderId || senderIdOf(msg?.sender);
+    if (myId && sid) return sid === myId;
+    return labelFor(msg?.sender) === myLabel; // fallback for legacy rows
+};
 
 /* ------------ main component ------------ */
 export default function ChatPage() {
@@ -50,15 +58,22 @@ export default function ChatPage() {
     const eventKey = idParam ?? slug;
 
     const location = useLocation();
-    const coverFromNav = location.state?.coverImage || null;   // ← from EventHero
+    const coverFromNav = location.state?.coverImage || null;
     const titleFromNav = location.state?.title || "";
     const subtitleFromNav = location.state?.subtitle || "";
 
-    const { user } = useAuth();
+    const { user, isAuthenticated, loading } = useAuth();
     const myLabel = useMemo(
         () => user?.fullName || user?.username || "Anon",
         [user?.fullName, user?.username]
     );
+    const myId = useMemo(() => (user?._id ? String(user._id) : null), [user?._id]);
+    const isMine = useMemo(() => isMineFactory(myId, myLabel), [myId, myLabel]);
+
+    // GUEST GATE
+    if (!loading && !isAuthenticated) {
+        return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
+    }
 
     const [event, setEvent] = useState(null);
     const [messages, setMessages] = useState([]);
@@ -90,7 +105,7 @@ export default function ChatPage() {
 
     // Load event
     useEffect(() => {
-        if (!eventKey) return;
+        if (!eventKey || !isAuthenticated) return;
         let alive = true;
         (async () => {
             try {
@@ -101,14 +116,12 @@ export default function ChatPage() {
                 console.error("[chat] Failed to load event", e);
             }
         })();
-        return () => {
-            alive = false;
-        };
-    }, [eventKey]);
+        return () => { alive = false; };
+    }, [eventKey, isAuthenticated]);
 
     // Load history
     useEffect(() => {
-        if (!eventKey) return;
+        if (!eventKey || !isAuthenticated) return;
         let alive = true;
         setLoadingHistory(true);
         (async () => {
@@ -117,52 +130,55 @@ export default function ChatPage() {
                 if (!alive) return;
                 msgIndex.current = new Map();
                 setMessages([]);
-                data.forEach(upsert);
+                (data || []).forEach(upsert);
             } catch (e) {
                 console.error("[chat] Failed to load messages", e);
             } finally {
                 if (alive) setLoadingHistory(false);
             }
         })();
-        return () => {
-            alive = false;
-        };
-    }, [eventKey]);
+        return () => { alive = false; };
+    }, [eventKey, isAuthenticated]);
 
-    // Socket join + listeners
+    // Socket join + listeners (unified "chat_message" with room = event._id)
     useEffect(() => {
-        if (!user || !event?._id) return;
+        if (!user || !event?._id || !isAuthenticated) return;
 
         connectSocket();
 
         const roomId = String(event._id);
-        const onMsg = (msg) => {
-            const senderLabel = labelFor(msg.sender);
-            if (senderLabel === myLabel && pendingByText.current.has(msg.text)) {
-                const { tmpId, ts } = pendingByText.current.get(msg.text) || {};
+        const onConnect = () => socket.emit("join_room", roomId);
+
+        const onMsg = (payload) => {
+            if (!payload || payload.room !== roomId) return;
+
+            const sid = senderIdOf(payload.sender);
+            if (sid === myId && pendingByText.current.has(payload.text)) {
+                const { tmpId, ts } = pendingByText.current.get(payload.text) || {};
                 if (ts && Date.now() - ts <= 10_000 && tmpId) {
-                    pendingByText.current.delete(msg.text);
-                    replaceTmpWithSaved(tmpId, msg);
+                    pendingByText.current.delete(payload.text);
+                    replaceTmpWithSaved(tmpId, payload);
                     return;
                 }
-                pendingByText.current.delete(msg.text);
+                pendingByText.current.delete(payload.text);
             }
-            upsert(msg);
+            upsert(payload);
         };
 
-        const onErr = (err) =>
-            console.error("[socket] connect_error:", err?.message || err);
+        const onErr = (err) => console.error("[socket] connect_error:", err?.message || err);
 
+        socket.on("connect", onConnect);
         socket.on("connect_error", onErr);
-        socket.emit("join_room", roomId);
-        socket.on("event_message", onMsg);
+        socket.on("chat_message", onMsg);
+        socket.emit("join_room", roomId); // also join immediately
 
         return () => {
-            socket.off("event_message", onMsg);
+            socket.off("connect", onConnect);
             socket.off("connect_error", onErr);
+            socket.off("chat_message", onMsg);
             socket.emit("leave_room", roomId);
         };
-    }, [event?._id, myLabel, user?._id]);
+    }, [event?._id, myId, user?._id, isAuthenticated]);
 
     // auto-scroll
     const scrollerRef = useRef(null);
@@ -201,7 +217,7 @@ export default function ChatPage() {
         }, 0);
     };
 
-    // unified hero image (first available key)
+    // unified hero image
     const heroImage = useMemo(() => {
         return (
             coverFromNav ||
@@ -236,14 +252,16 @@ export default function ChatPage() {
     const sendMessage = (e) => {
         e.preventDefault();
         const trimmed = text.trim();
-        if (!trimmed || !event?._id) return;
+        if (!trimmed || !event?._id || !isAuthenticated) return;
 
+        const roomId = String(event._id);
         const tmpId = `tmp-${Date.now()}`;
         const tmp = {
             _id: tmpId,
             text: trimmed,
-            sender: myLabel,
+            sender: { _id: myId, fullName: user?.fullName, username: user?.username }, // important
             createdAt: new Date().toISOString(),
+            room: roomId,
         };
         if (!msgIndex.current.has(tmpId)) {
             msgIndex.current.set(tmpId, true);
@@ -252,38 +270,22 @@ export default function ChatPage() {
         setText("");
         pendingByText.current.set(trimmed, { tmpId, ts: Date.now() });
 
-        socket.emit(
-            "event_message",
-            { eventId: String(event._id), text: trimmed },
-            (saved) => {
-                if (saved && saved._id) {
-                    pendingByText.current.delete(trimmed);
-                    replaceTmpWithSaved(tmpId, saved);
-                }
+        socket.emit("chat_message", { room: roomId, text: trimmed }, (saved) => {
+            if (saved && saved._id) {
+                pendingByText.current.delete(trimmed);
+                replaceTmpWithSaved(tmpId, saved);
             }
-        );
+        });
     };
 
-    const title = event?.title ?? "Event Chat";
-    const subTitle = event?.subtitle || event?.slug || "";
-
-    useEffect(() => {
-        console.log("chat route coverFromNav:", coverFromNav);
-        console.log("event cover candidates:", {
-            coverImage: event?.coverImage,
-            coverUrl: event?.cover?.url,
-            bannerUrl: event?.bannerUrl,
-            imagesBanner: event?.images?.banner,
-            heroImage: event?.heroImage,
-        });
-    }, [event, coverFromNav]);
+    const title = event?.title ?? titleFromNav ?? "Event Chat";
+    const subTitle = event?.subtitle || event?.slug || subtitleFromNav || "";
 
     return (
         <div className="relative min-h-screen">
-            {/* single background from the event */}
-            {/* Background layer (image optional) */}
-            <div className="absolute inset-0 z-0 pointer-events-none">
-                {heroImage && (
+            {/* background */}
+            {heroImage ? (
+                <div className="pointer-events-none absolute inset-0 -z-10">
                     <img
                         src={heroImage}
                         alt={event?.title || "Event cover"}
@@ -291,10 +293,11 @@ export default function ChatPage() {
                         loading="lazy"
                         decoding="async"
                     />
-                )}
-                {/* black bottom → white top */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-white" />
-            </div>
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-white" />
+                </div>
+            ) : (
+                <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-t from-black/80 via-black/10 to-white" />
+            )}
 
             <div className="mx-auto max-w-3xl py-8 px-3 md:px-0">
                 {/* Header */}
@@ -303,12 +306,8 @@ export default function ChatPage() {
                         <MessageSquareText className="h-5 w-5" />
                     </div>
                     <div>
-                        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
-                            {title}
-                        </h1>
-                        {!!subTitle && (
-                            <p className="text-sm text-muted-foreground">{subTitle}</p>
-                        )}
+                        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{title}</h1>
+                        {!!subTitle && <p className="text-sm text-muted-foreground">{subTitle}</p>}
                     </div>
                 </div>
 
@@ -340,11 +339,7 @@ export default function ChatPage() {
                                     </div>
                                 </div>
                             ) : (
-                                <MessageBubble
-                                    key={row._id}
-                                    msg={row}
-                                    isMe={labelFor(row.sender) === myLabel}
-                                />
+                                <MessageBubble key={row._id} msg={row} isMe={isMine(row)} />
                             )
                         )}
                     </div>
@@ -380,8 +375,7 @@ export default function ChatPage() {
 
                             <button
                                 type="button"
-                                className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border bg-background transition ${showEmoji ? "bg-muted" : "hover:bg-muted"
-                                    }`}
+                                className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border bg-background transition ${showEmoji ? "bg-muted" : "hover:bg-muted"}`}
                                 title="Emoji"
                                 onClick={() => setShowEmoji((v) => !v)}
                             >
