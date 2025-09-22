@@ -30,6 +30,10 @@ import { useEvents } from "@/context/EventContext";
 import EditEventModal from "@/components/event/EditEventModal";
 import CreateEventModal from "@/components/event/CreateEventModal";
 
+import { OrganizerTicketProvider } from "@/context/OrganizerTicketContext";
+import CreateTicketModal from "@/components/tickets/CreateTicketModal";
+import {toast} from "sonner"
+
 function pickStatus(ev) {
   return (
     ev?.status ??
@@ -53,12 +57,17 @@ export default function OrganizerEventsPane() {
   const createdId = location.state?.createdId; // passed from CreateEventModal
 
   const {
-    state: { events, loading, error },
+    state: { events, loading, error, deletingId },
     fetchMyEvents,
+     deleteEvent,
   } = useEvents();
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+
+  const [openCreateTicket, setOpenCreateTicket] = useState(false);
+  const [createdEventId, setCreatedEventId] = useState(null);
+  const [createdEventEndAt, setCreatedEventEndAt] = useState("");
 
   // map of refs to wrapper nodes so we can scroll/highlight the new card
   const itemRefs = useRef({}); // { [id]: HTMLElement }
@@ -166,11 +175,11 @@ export default function OrganizerEventsPane() {
   const handleView = (ev) => navigate(`/events/${ev.slug || ev._id}`);
   const handleEdit = (ev) => setEditing(ev);
   const handleCloseEdit = () => setEditing(null);
-  const handleDelete = async (ev) => {
-    // TODO: delete then await fetchMyEvents();
-    console.log("[delete] not wired yet →", ev?._id);
-  };
-
+const handleDelete = async (ev) => {
+  try {
+    await deleteEvent(ev._id);
+  } catch {}
+};
   // 🔔 Highlight & scroll the newly-created event into view
   useEffect(() => {
     if (!createdId || !filteredEvents.length) return;
@@ -351,6 +360,7 @@ export default function OrganizerEventsPane() {
         </div>
       )}
 
+     {/* Modals */}
       <EditEventModal
         open={!!editing}
         event={editing}
@@ -358,8 +368,30 @@ export default function OrganizerEventsPane() {
           if (!isOpen) handleCloseEdit();
         }}
       />
-      <CreateEventModal open={creating} onOpenChange={setCreating} />
 
+      {/* Event creation modal. Parent controls the post-create flow */}
+     <CreateEventModal
+  open={creating}
+  onOpenChange={setCreating}
+  onEventCreated={(evt) => {
+    setCreating(false);
+    setCreatedEventId(evt?._id || null);
+    setCreatedEventEndAt(evt?.endAt || "");
+    // Open **after** state is committed (next tick is enough)
+    setTimeout(() => setOpenCreateTicket(true), 0);
+  }}
+/>
+
+      {/* ⬇️ Ticket modal + provider live OUTSIDE the event modal */}
+      <OrganizerTicketProvider>
+  <CreateTicketModal
+    key={createdEventId || "new"}              // ✅ force fresh state per event
+    open={openCreateTicket}
+    onOpenChange={setOpenCreateTicket}
+    eventId={createdEventId}
+    eventEndAt={createdEventEndAt}
+  />
+</OrganizerTicketProvider>
     </div>
   );
 }

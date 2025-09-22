@@ -8,6 +8,7 @@ import {
   getMyAttending,
   updateOrganizerProfile,
   updateEvent,
+    deleteEvent,
 } from "../controllers/events.controller.js";
 import { getEventAttendeeCount } from "../controllers/attendeeController.js";
 import { getEventDashboardStats } from "../controllers/eventAnalyticsController.js";
@@ -26,6 +27,7 @@ router.get("/me/organizing", checkToken, getMyOrganizing);
 router.get("/me/attending", checkToken, getMyAttending);
 
 router.get("/:id", getEvent);
+router.delete("/:id", checkToken, deleteEvent);
 router.get(
   "/:eventId/dashboard/stats",
   checkToken,

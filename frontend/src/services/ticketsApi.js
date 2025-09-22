@@ -63,3 +63,27 @@ export const completeDummyPayment = (orderId) =>
       }
       throw err;
     });
+
+    // Organizer: list ticket types for an event
+export const listEventTickets = (eventId) =>
+  axios.get(`/tickets/event/${eventId}`).then(r => r.data?.tickets || []);
+
+// Organizer: create a ticket type for an event
+export const createEventTicket = async (eventId, data) => {
+  try {
+    const r = await axios.post(`/tickets/events/${eventId}`, data);
+    return r.data?.ticket;
+  } catch (err) {
+    const res = err?.response?.data;
+    console.error("[createEventTicket] 422 payload sent:", data);
+    console.error("[createEventTicket] 422 response:", res);
+    throw err; // keep bubbling
+  }
+};
+
+// Organizer: update & delete (optional use later)
+export const updateEventTicket = (id, data) =>
+  axios.put(`/tickets/${id}`, data).then(r => r.data?.ticket);
+
+export const deleteEventTicket = (id) =>
+  axios.delete(`/tickets/${id}`).then(() => true);

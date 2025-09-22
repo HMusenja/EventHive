@@ -91,3 +91,11 @@ export async function isSlugAvailable(slug) {
     return false;
   }
 }
+
+ //Delete Event by id
+export async function deleteEventById(eventId) {
+  const { data } = await axios.delete(`/api/events/${eventId}`, {
+    withCredentials: true, 
+  });
+  return data;
+}

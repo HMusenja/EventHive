@@ -236,3 +236,39 @@ export async function updateEvent(req, res, next) {
     next(err);
   }
 }
+
+// DELETE /api/events/:id
+export async function deleteEvent(req, res, next) {
+  try {
+    const { id } = req.params;
+    const userId = req.user?._id;
+
+    const event = await Event.findById(id);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+
+    // auth: owner or organizer
+    const isOwner = String(event.ownerId) === String(userId);
+    const isOrganizer = await EventMember.exists({
+      eventId: event._id,
+      userId,
+      roles: "organizer",
+    });
+
+    if (!isOwner && !isOrganizer) {
+      return res.status(403).json({ message: "Not authorized to delete this event" });
+    }
+
+    // Optional: cascade delete. Keep or remove these as your data model needs.
+    await Promise.all([
+      Attendee.deleteMany({ eventId: event._id }),
+      EventMember.deleteMany({ eventId: event._id }),
+      // If you have a Ticket model: await Ticket.deleteMany({ eventId: event._id }),
+    ]);
+
+    await event.deleteOne();
+
+    return res.json({ ok: true, id });
+  } catch (err) {
+    next(err);
+  }
+}
