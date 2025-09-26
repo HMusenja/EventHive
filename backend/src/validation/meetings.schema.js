@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const CreateMeetingSchema = z.object({
-    eventId: z.string().min(1),
+    eventId: z.string().min(1).optional(),
     inviteeId: z.string().min(1),
     startAt: z.coerce.date(), // accepts ISO string, coerces to Date
     endAt: z.coerce.date(),
@@ -12,4 +12,5 @@ export const CreateMeetingSchema = z.object({
 
 export const UpdateStatusSchema = z.object({
     status: z.enum(["accepted", "declined", "cancelled"]),
+    note: z.string().max(300).optional(),
 });

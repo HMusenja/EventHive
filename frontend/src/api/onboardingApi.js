@@ -15,10 +15,9 @@ export async function getMyEventMember(eventId) {
     const { data } = await axios.get(`api/events/${eventId}/me`);
     // Server may return { isMember:false } when not a member.
     if (data && data.isMember === false) return null;
-    return data; // { isMember:true, _id, role, status } or whatever your controller returns
+    return data;
   } catch (err) {
     const status = err.response?.status;
-    // Treat unauthenticated or not-found membership as "no membership" for UI purposes
     if (status === 401 || status === 404) return null;
     throw err;
   }
@@ -48,7 +47,7 @@ export async function updateMyEventProfile(eventId, payload) {
   return data;
 }
 
-// Tag suggestions (kept as-is, just remove the leading /api)
+// Tag suggestions
 export async function suggestTags(eventId, q) {
   try {
     const { data } = await axios.get(`api/tags/suggest`, { params: { eventId, q } });
@@ -58,9 +57,7 @@ export async function suggestTags(eventId, q) {
   }
 }
 
-// If you keep this alias, make it call the same endpoint as updateMyEventProfile
+// Alias to updateMyEventProfile
 export async function putAttendeeProfile(eventId, payload) {
-
   return updateMyEventProfile(eventId, payload);
-
 }

@@ -1,7 +1,7 @@
-// controllers/authController.js
-import User from "../models/User.js";
 import createError from "http-errors";
+import mongoose from "mongoose";
 import { generateToken } from "../utils/jwt.js";
+import User from "../models/User.js";
 
 // ---------------- Register ----------------
 export const registerUser = async (req, res, next) => {
@@ -139,6 +139,36 @@ export const getMe = async (req, res, next) => {
     const user = req.user;
     res.status(200).json({ user });
   } catch (error) { next(error); }
+};
+
+// ---------------- List Users (global) ----------------
+export const listUsers = async (req, res, next) => {
+  try {
+    const me = req.user?._id ? String(req.user._id) : null;
+    const { q = "", limit = 100 } = req.query;
+
+    const max = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 200);
+    const needle = String(q || "").trim();
+
+    const criteria = {};
+    if (needle) {
+      const rx = new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      criteria.$or = [{ fullName: rx }, { username: rx }, { email: rx }];
+    }
+    if (me && mongoose.isValidObjectId(me)) {
+      criteria._id = { $ne: new mongoose.Types.ObjectId(me) }; // exclude me
+    }
+
+    const users = await User.find(criteria)
+      .select("_id fullName username avatar")
+      .sort({ fullName: 1 })
+      .limit(max)
+      .lean();
+
+    res.json({ users });
+  } catch (error) {
+    next(error);
+  }
 };
 
 // ---------------- Logout ----------------

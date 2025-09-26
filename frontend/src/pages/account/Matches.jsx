@@ -1,118 +1,111 @@
-import { useState } from "react";
-import { Heart, MessageCircle, Calendar, MapPin, Briefcase, Star, Filter } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useParams } from "react-router-dom";
+import {
+  Heart,
+  MessageCircle,
+  Calendar,
+  MapPin,
+  Briefcase,
+  Star,
+  Filter,
+} from "lucide-react";
+
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-const Matches = () => {
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/context/AuthContext";
+import ScheduleMeetingModal from "@/components/meetings/ScheduleMeetingModal";
+// data sources
+import { fetchEventAttendees } from "@/api/meetingsApi";
+import { fetchGlobalMatches as getMatchSuggestions } from "@/api/matchApi";
+
+const HEX24 = /^[0-9a-fA-F]{24}$/;
+
+export default function Matches() {
+  const { eventId } = useParams(); // optional: /events/:eventId/matches
+  const { user } = useAuth();
+  const { toast } = useToast();
+
   const [searchTerm, setSearchTerm] = useState("");
   const [filterBy, setFilterBy] = useState("all");
 
-  const mockMatches = [
-    {
-      id: 1,
-      name: "Sarah Johnson",
-      role: "Product Manager",
-      company: "Google",
-      location: "Mountain View, CA",
-      avatar: "/placeholder-avatar-1.jpg",
-      matchScore: 92,
-      bio: "Passionate about building products that make a difference. Love hiking and photography in my free time.",
-      interests: ["Product Strategy", "UX Design", "Hiking", "Photography"],
-      skills: ["Product Management", "Analytics", "Leadership"],
-      mutualConnections: 5,
-      status: "new"
-    },
-    {
-      id: 2,
-      name: "Michael Chen",
-      role: "Senior Developer",
-      company: "Meta",
-      location: "Menlo Park, CA",
-      avatar: "/placeholder-avatar-2.jpg",
-      matchScore: 89,
-      bio: "Full-stack developer with a passion for clean code and innovative solutions. Always learning new technologies.",
-      interests: ["Machine Learning", "React", "Gaming", "Cooking"],
-      skills: ["JavaScript", "Python", "System Design"],
-      mutualConnections: 3,
-      status: "viewed"
-    },
-    {
-      id: 3,
-      name: "Emily Rodriguez",
-      role: "UX Designer",
-      company: "Airbnb",
-      location: "San Francisco, CA",
-      avatar: "/placeholder-avatar-3.jpg",
-      matchScore: 86,
-      bio: "Creative designer focused on user-centered design. Love traveling and experiencing different cultures.",
-      interests: ["Design Systems", "Travel", "Art", "Yoga"],
-      skills: ["Figma", "User Research", "Prototyping"],
-      mutualConnections: 8,
-      status: "connected"
-    },
-    {
-      id: 4,
-      name: "David Kim",
-      role: "Data Scientist",
-      company: "Netflix",
-      location: "Los Gatos, CA",
-      avatar: "/placeholder-avatar-4.jpg",
-      matchScore: 84,
-      bio: "Data enthusiast who loves turning numbers into insights. Passionate about AI and its applications.",
-      interests: ["AI/ML", "Statistics", "Music", "Rock Climbing"],
-      skills: ["Python", "R", "Machine Learning"],
-      mutualConnections: 2,
-      status: "new"
-    },
-    {
-      id: 5,
-      name: "Lisa Wang",
-      role: "Marketing Director",
-      company: "Spotify",
-      location: "San Francisco, CA",
-      avatar: "/placeholder-avatar-5.jpg",
-      matchScore: 81,
-      bio: "Creative marketer with a focus on growth and brand building. Love music and discovering new artists.",
-      interests: ["Digital Marketing", "Music", "Podcasts", "Running"],
-      skills: ["Growth Marketing", "Brand Strategy", "Analytics"],
-      mutualConnections: 6,
-      status: "viewed"
-    },
-    {
-      id: 6,
-      name: "Alex Thompson",
-      role: "Engineering Manager",
-      company: "Stripe",
-      location: "San Francisco, CA",
-      avatar: "/placeholder-avatar-6.jpg",
-      matchScore: 78,
-      bio: "Engineering leader passionate about building great teams and scalable systems. Love mentoring and coffee.",
-      interests: ["Leadership", "Mentoring", "Coffee", "Cycling"],
-      skills: ["Team Leadership", "System Architecture", "Mentoring"],
-      mutualConnections: 4,
-      status: "connected"
-    }
-  ];
+  // unified list to render (from event attendees or global matches)
+  const [people, setPeople] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const filteredMatches = mockMatches.filter(match => {
-    const matchesSearch = match.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         match.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         match.company.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesFilter = filterBy === "all" || match.status === filterBy;
-    
-    return matchesSearch && matchesFilter;
-  });
+  // modal state
+  const [isScheduleOpen, setScheduleOpen] = useState(false);
+  const [presetInviteeId, setPresetInviteeId] = useState(null);
 
+  // ---- Load data (event attendees OR global matches) ----
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        setLoading(true);
+
+        if (eventId) {
+          // Event mode
+          const res = await fetchEventAttendees(eventId, { limit: 100 });
+          const list = (res?.attendees || []).map((a) => ({
+            id: String(a.userId || a.user?._id || a._id || ""),
+            name: a.user?.fullName || a.user?.username || "",
+            role: a.user?.title || a.user?.role || "Attendee",
+            company: a.user?.company || a.user?.organization || "",
+            location: a.user?.location || "",
+            avatar: a.user?.avatarUrl || "",
+            matchScore: a.score ?? 80,
+            bio: a.user?.bio || "",
+            interests: a.user?.interests || [],
+            mutualConnections: a.user?.mutualConnections || 0,
+            status: "new",
+          }));
+          if (mounted) setPeople(list);
+        } else {
+          // Global mode (interests-based matches)
+          const matches = await getMatchSuggestions();
+          const list = (matches || []).map((m) => ({
+            id: String(m.userId || m._id || m.user?._id || m.id || ""),
+            name: m.name || m.fullName || m.user?.fullName || m.user?.username || "Unknown",
+            role: m.user?.title || m.role || "Member",
+            company: m.user?.company || m.company || "",
+            location: m.user?.location || m.location || "",
+            avatar: m.user?.avatarUrl || m.avatar || "",
+            matchScore: m.matchScore ?? 80,
+            bio: m.user?.bio || m.bio || "",
+            interests: m.user?.interests || m.interests || [],
+            mutualConnections: m.user?.mutualConnections || m.mutualConnections || 0,
+            status: m.status || "new",
+          }));
+          if (mounted) setPeople(list);
+        }
+      } catch (e) {
+        toast({
+          title: "Could not load matches",
+          description: e?.response?.data?.message || e?.message,
+          variant: "destructive",
+        });
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [eventId, toast]);
+
+  // ---- Helpers ----
   const getStatusColor = (status) => {
     switch (status) {
       case "new": return "bg-gradient-to-r from-green-400 to-green-600";
       case "viewed": return "bg-gradient-to-r from-blue-400 to-blue-600";
       case "connected": return "bg-gradient-to-r from-purple-400 to-purple-600";
+      case "requested": return "bg-gradient-to-r from-amber-400 to-amber-600";
       default: return "bg-gradient-to-r from-gray-400 to-gray-600";
     }
   };
@@ -123,6 +116,35 @@ const Matches = () => {
     if (score >= 70) return "text-yellow-600";
     return "text-red-600";
   };
+
+  const getInviteeId = (p) => String(p.id || "").trim();
+
+  // ---- Filter UI list ----
+  const filtered = useMemo(() => {
+    const term = searchTerm.toLowerCase();
+    return (people || []).filter((p) => {
+      const matchesSearch =
+        (p.name || "").toLowerCase().includes(term) ||
+        (p.role || "").toLowerCase().includes(term) ||
+        (p.company || "").toLowerCase().includes(term);
+      const matchesFilter = filterBy === "all" || p.status === filterBy;
+      return matchesSearch && matchesFilter;
+    });
+  }, [people, searchTerm, filterBy]);
+
+  // ---- Modal open ----
+  function openSchedule(id) {
+    if (!id) {
+      toast({
+        title: "Unavailable for scheduling",
+        description: "This profile isn’t linked to a user yet.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setPresetInviteeId(String(id));
+    setScheduleOpen(true);
+  }
 
   return (
     <div className="space-y-6">
@@ -174,7 +196,7 @@ const Matches = () => {
               </div>
               <div>
                 <p className="text-sm font-medium text-green-800 dark:text-green-200">Total Matches</p>
-                <p className="text-2xl font-bold text-green-900 dark:text-green-100">{mockMatches.length}</p>
+                <p className="text-2xl font-bold text-green-900 dark:text-green-100">{people.length}</p>
               </div>
             </div>
           </CardContent>
@@ -189,7 +211,7 @@ const Matches = () => {
               <div>
                 <p className="text-sm font-medium text-blue-800 dark:text-blue-200">Connected</p>
                 <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">
-                  {mockMatches.filter(m => m.status === "connected").length}
+                  {people.filter((m) => m.status === "connected").length}
                 </p>
               </div>
             </div>
@@ -205,7 +227,13 @@ const Matches = () => {
               <div>
                 <p className="text-sm font-medium text-purple-800 dark:text-purple-200">Avg Match Score</p>
                 <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">
-                  {Math.round(mockMatches.reduce((sum, m) => sum + m.matchScore, 0) / mockMatches.length)}%
+                  {people.length
+                    ? Math.round(
+                      people.reduce((sum, m) => sum + (m.matchScore || 0), 0) /
+                      people.length
+                    )
+                    : 0}
+                  %
                 </p>
               </div>
             </div>
@@ -214,85 +242,125 @@ const Matches = () => {
       </div>
 
       {/* Matches Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {filteredMatches.map((match) => (
-          <Card key={match.id} className="overflow-hidden hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
-            <CardHeader className="pb-4">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <Avatar className="h-16 w-16 border-2 border-primary/20">
-                    <AvatarImage src={match.avatar} />
-                    <AvatarFallback className="bg-gradient-to-br from-primary to-secondary text-primary-foreground text-lg">
-                      {match.name.split(' ').map(n => n[0]).join('')}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1">
-                    <CardTitle className="text-lg">{match.name}</CardTitle>
-                    <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                      <Briefcase className="h-3 w-3" />
-                      {match.role} at {match.company}
+      {loading ? (
+        <div className="text-sm text-muted-foreground">Loading…</div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {filtered.map((match) => {
+            const inviteeId = getInviteeId(match);
+
+            // allow schedule if we have an id and (in event mode the id looks like ObjectId)
+            const idLooksOk = inviteeId && (!eventId || HEX24.test(inviteeId));
+            // also prevent self-invite
+            const notSelf = !user?._id || String(user._id) !== inviteeId;
+            const canSchedule = Boolean(idLooksOk && notSelf);
+
+            return (
+              <Card
+                key={match.id || inviteeId}
+                className="overflow-hidden hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1"
+              >
+                <CardHeader className="pb-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-16 w-16 border-2 border-primary/20">
+                        <AvatarImage src={match.avatar} />
+                        <AvatarFallback className="bg-gradient-to-br from-primary to-secondary text-primary-foreground text-lg">
+                          {match.name?.split(" ").map((n) => n[0]).join("")}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1">
+                        <CardTitle className="text-lg">{match.name}</CardTitle>
+                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                          <Briefcase className="h-3 w-3" />
+                          {match.role}
+                          {match.company ? ` at ${match.company}` : ""}
+                        </div>
+                        {match.location && (
+                          <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                            <MapPin className="h-3 w-3" />
+                            {match.location}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                      <MapPin className="h-3 w-3" />
-                      {match.location}
+                    <div className="flex flex-col items-end gap-1">
+                      <Badge className={`${getStatusColor(match.status)} text-white border-0`}>
+                        {match.status}
+                      </Badge>
+                      <div className={`text-sm font-semibold ${getMatchScoreColor(match.matchScore)}`}>
+                        {match.matchScore}% match
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="flex flex-col items-end gap-1">
-                  <Badge className={`${getStatusColor(match.status)} text-white border-0`}>
-                    {match.status}
-                  </Badge>
-                  <div className={`text-sm font-semibold ${getMatchScoreColor(match.matchScore)}`}>
-                    {match.matchScore}% match
-                  </div>
-                </div>
-              </div>
-            </CardHeader>
+                </CardHeader>
 
-            <CardContent className="space-y-4">
-              <p className="text-sm text-muted-foreground line-clamp-2">
-                {match.bio}
-              </p>
-
-              <div className="space-y-2">
-                <div className="flex flex-wrap gap-1">
-                  {match.interests.slice(0, 3).map((interest, index) => (
-                    <Badge key={index} variant="secondary" className="text-xs">
-                      {interest}
-                    </Badge>
-                  ))}
-                  {match.interests.length > 3 && (
-                    <Badge variant="outline" className="text-xs">
-                      +{match.interests.length - 3} more
-                    </Badge>
+                <CardContent className="space-y-4">
+                  {match.bio && (
+                    <p className="text-sm text-muted-foreground line-clamp-2">
+                      {match.bio}
+                    </p>
                   )}
-                </div>
 
-                <div className="text-xs text-muted-foreground">
-                  {match.mutualConnections} mutual connections
-                </div>
-              </div>
+                  {match.interests?.length ? (
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap gap-1">
+                        {match.interests.slice(0, 3).map((interest, i) => (
+                          <Badge key={i} variant="secondary" className="text-xs">
+                            {interest}
+                          </Badge>
+                        ))}
+                        {match.interests.length > 3 && (
+                          <Badge variant="outline" className="text-xs">
+                            +{match.interests.length - 3} more
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {match.mutualConnections} mutual connections
+                      </div>
+                    </div>
+                  ) : null}
 
-              <div className="flex gap-2">
-                <Button 
-                  size="sm" 
-                  className="flex-1 bg-gradient-to-r from-primary to-secondary"
-                  disabled={match.status === "connected"}
-                >
-                  <MessageCircle className="h-4 w-4 mr-2" />
-                  {match.status === "connected" ? "Connected" : "Message"}
-                </Button>
-                <Button size="sm" variant="outline" className="flex-1">
-                  <Calendar className="h-4 w-4 mr-2" />
-                  Schedule
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      className="flex-1 bg-gradient-to-r from-primary to-secondary"
+                      disabled={match.status === "connected"}
+                    >
+                      <MessageCircle className="h-4 w-4 mr-2" />
+                      {match.status === "connected" ? "Connected" : "Message"}
+                    </Button>
 
-      {filteredMatches.length === 0 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() =>
+                        canSchedule
+                          ? openSchedule(inviteeId)
+                          : toast({
+                            title: "Unavailable for scheduling",
+                            description:
+                              "This profile can’t be scheduled right now.",
+                            variant: "destructive",
+                          })
+                      }
+                      disabled={!canSchedule}
+                      title={canSchedule ? "Schedule a meeting" : "Unavailable for scheduling"}
+                    >
+                      <Calendar className="h-4 w-4 mr-2" />
+                      Schedule
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {filtered.length === 0 && !loading && (
         <div className="text-center py-12">
           <div className="mx-auto w-24 h-24 bg-muted rounded-full flex items-center justify-center mb-4">
             <Heart className="h-8 w-8 text-muted-foreground" />
@@ -303,8 +371,14 @@ const Matches = () => {
           </p>
         </div>
       )}
+
+      {/* ✅ OLD POPUP MODAL (works global or event-scoped) */}
+      <ScheduleMeetingModal
+        isOpen={isScheduleOpen}
+        onClose={() => setScheduleOpen(false)}
+        presetInviteeId={presetInviteeId}
+        eventId={eventId || undefined}
+      />
     </div>
   );
-};
-
-export default Matches;
+}

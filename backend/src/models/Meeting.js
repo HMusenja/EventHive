@@ -2,8 +2,7 @@ import mongoose from "mongoose";
 
 const meetingSchema = new mongoose.Schema(
     {
-        eventId: { type: mongoose.Schema.Types.ObjectId, ref: "Event", required: true },
-
+        eventId: { type: mongoose.Schema.Types.ObjectId, ref: "Event" }, // optional for global meetings
         requesterId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true }, // who sent request
         inviteeId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true }, // who receives
 
@@ -18,6 +17,7 @@ const meetingSchema = new mongoose.Schema(
 
         // optional extras
         message: { type: String, default: "" },   // requester note
+        responseNote: { type: String, default: "" }, // invitee’s short note on accept/decline
         notes: { type: String, default: "" },   // internal or shared note
     },
     { timestamps: true }

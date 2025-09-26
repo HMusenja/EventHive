@@ -1,14 +1,15 @@
-// routes/matchmaking.routes.js
 import express from "express";
 import checkToken from "../middleware/checkToken.js";
-// If you already have these, plug them in:
 import {
   requireEventRole,
   requireEventAccess,
 } from "../middleware/requireEventRole.js";
 
-import { searchEventAttendees } from "../controllers/matches.controller.js";
-import { getMatchSuggestions } from "../controllers/eventMatchController.js";
+import {
+  getMatchSuggestions,
+  searchEventAttendees,
+  getGlobalMatches,
+} from "../controllers/matches.controller.js"; // ✅ Only this one
 
 const router = express.Router();
 
@@ -33,5 +34,11 @@ router.get(
   requireEventAccess, // implements attendee-or-organizer
   searchEventAttendees
 );
+
+/**
+ * GET /api/matches?interests=...&limit=...
+ * Global fallback match list
+ */
+router.get("/matches", checkToken, getGlobalMatches);
 
 export default router;

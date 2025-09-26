@@ -1,5 +1,6 @@
-// src/services/checkinApi.js
-import axios from "axios";
+import axios from "@/services/axiosConfig";
 
 export const scanCheckin = (eventId, { orderId, ticketRef }) =>
-  axios.post(`/api/events/${eventId}/checkin`, { orderId, ticketRef }).then(r => r.data);
+  axios
+    .post(`/events/${eventId}/checkin`, { orderId, ticketRef })
+    .then((r) => r.data);

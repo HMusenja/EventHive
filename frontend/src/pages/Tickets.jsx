@@ -6,7 +6,7 @@ import TicketCard from "@/components/events/TicketCard";
 import GuestCheckoutForm from "@/components/tickets/GuestCheckoutForm";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { checkoutSigned } from "@/services/ticketsApi";
+import { checkoutSigned } from "@/api/ticketsApi";
 import { useEventTickets } from "@/hooks/useTickets";
 import { useState, useMemo } from "react";
 
@@ -144,11 +144,11 @@ export default function Tickets() {
             ticket={
               selectedTicket
                 ? {
-                    _id: selectedTicket._id,
-                    name: selectedTicket.name,
-                    priceCents: selectedTicket.priceCents || 0,
-                    currency: selectedTicket.currency || "eur",
-                  }
+                  _id: selectedTicket._id,
+                  name: selectedTicket.name,
+                  priceCents: selectedTicket.priceCents || 0,
+                  currency: selectedTicket.currency || "eur",
+                }
                 : null
             }
             onBack={() => setGuestMode(false)}
@@ -159,9 +159,8 @@ export default function Tickets() {
               {cart.map((i, idx) => (
                 <label
                   key={i.ticketId}
-                  className={`flex items-center justify-between text-sm rounded-md border p-2 cursor-pointer ${
-                    idx === selectedIdx ? "border-primary" : "border-border"
-                  }`}
+                  className={`flex items-center justify-between text-sm rounded-md border p-2 cursor-pointer ${idx === selectedIdx ? "border-primary" : "border-border"
+                    }`}
                   onClick={() => setSelectedIdx(idx)}
                 >
                   <div className="flex items-center gap-2">

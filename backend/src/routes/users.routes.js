@@ -5,6 +5,7 @@ import {
   loginUser,
   logoutUser,
   getMe,
+  listUsers,
 } from "../controllers/users.controller.js";
 import {
   getMyProfile,
@@ -19,6 +20,9 @@ router.post("/login", loginUser);
 router.post("/logout", logoutUser);
 
 router.get("/me", checkToken, getMe);
+
+// Global list for Matches / global scheduling
+router.get("/", checkToken, listUsers);
 
 // NEW unified-profile endpoints
 router.get("/me/profile", checkToken, getMyProfile);
