@@ -16,6 +16,7 @@ import Analytics from "@/pages/dashboard/organizer/Analytics";
 import RequestMeeting from "@/pages/RequestMeeting";
 import MyMeetings from "@/pages/MyMeetings";
 import AccountLayout from "@/pages/AccountLayout";
+import EditProfilePage from "@/pages/account/EditProfilePage";
 import Profile from "@/pages/account/Profile";
 import Matches from "@/pages/account/Matches";
 import Meetings from "@/pages/account/Meetings";
@@ -23,6 +24,7 @@ import MyTickets from "@/pages/account/MyTickets";
 import Settings from "@/pages/account/Settings";
 import AppShell from "@/components/layout/AppShell";
 import EventOnboardingPage from "@/components/events/EventOnboardingPage";
+import CreateEventPage from "@/pages/events/CreateEventPage";
 import Tickets from "@/pages/Tickets";
 import EventProfilePage from "@/pages/events/EventProfilePage";
 import PeopleSuggestionsPage from "@/pages/events/PeopleSuggestionsPage";
@@ -109,6 +111,8 @@ export default function AppRoutes() {
       <Route path="/account" element={<AccountLayout />}>
         <Route index element={<Navigate to="profile" replace />} />
         <Route path="profile" element={<Profile />} />
+        <Route path="profile/edit" element={<EditProfilePage />} />
+        <Route path="event/create" element={<CreateEventPage />} />
         <Route path="matches" element={<Matches />} />
         <Route path="meetings" element={<Meetings />} />
         <Route path="my-tickets" element={<MyTickets />} />

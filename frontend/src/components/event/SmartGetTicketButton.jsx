@@ -1,9 +1,7 @@
-// src/components/event/SmartGetTicketButton.jsx
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import OnboardCtaButton from "./OnboardCtaButton";
-// import GuestCheckoutForm from "@/components/ticket/GuestCheckoutForm";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -25,9 +23,9 @@ import {
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
-import { fetchTickets, checkoutGuest } from "@/services/ticketsApi"
+import { fetchTickets, checkoutGuest } from "@/services/ticketsApi";
 
-// Small inline form purpose-built for the guest flow in this modal
+// ---------------- Guest Checkout Form ----------------
 function GuestCheckoutForm({ eventId, ticket, onBack }) {
   const navigate = useNavigate();
   const [fullName, setFullName]   = useState("");
@@ -76,8 +74,6 @@ function GuestCheckoutForm({ eventId, ticket, onBack }) {
         navigate(`/pay/dummy-checkout?order=${res.orderId}`);
         return;
       }
-      // Fallback
-      // navigate("/tickets/success");
     } catch (err) {
       if (err?.code === "EMAIL_EXISTS") {
         setErrBanner({
@@ -155,11 +151,9 @@ function GuestCheckoutForm({ eventId, ticket, onBack }) {
             </div>
           )}
         </div>
-        {/* Promo intentionally omitted/disabled per your spec */}
       </div>
 
       <div className="flex items-start gap-2">
-        {/* shadcn Checkbox returns boolean or 'indeterminate' in some versions; coerce to boolean */}
         <input
           id="consent"
           type="checkbox"
@@ -188,6 +182,7 @@ function GuestCheckoutForm({ eventId, ticket, onBack }) {
   );
 }
 
+// ---------------- Main Button ----------------
 export default function SmartGetTicketButton({
   event,
   size = "lg",
@@ -197,48 +192,48 @@ export default function SmartGetTicketButton({
 }) {
   const { user } = useAuth();
 
-  // ---------- Signed-in users → delegate to OnboardCtaButton ----------
-  if (user?._id) {
-    return (
-      <OnboardCtaButton
-        event={event}
-        size={size}
-        variant={variant}
-        className={className}
-      >
-        {children}
-      </OnboardCtaButton>
-    );
-  }
-
-  // ---------- Guests: modal state + logic ----------
+  // 🔑 Hooks always run
   const [open, setOpen] = useState(false);
   const [tickets, setTickets] = useState([]);
   const [ticketId, setTicketId] = useState("");
   const [guestMode, setGuestMode] = useState(false);
 
-  // Load active tickets when modal opens
   useEffect(() => {
     if (!open || !event?._id) return;
+
     (async () => {
       try {
-        const list = await fetchTickets(event._id); // returns []
+        const list = await fetchTickets(event._id);
         setTickets(list);
         if (list.length && !ticketId) setTicketId(list[0]._id);
       } catch {
-        // ignore; select will be empty
+        // ignore
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, event?._id]);
+  }, [open, event?._id, ticketId]);
 
   const selectedTicket = useMemo(
     () => tickets.find((t) => t._id === ticketId),
     [tickets, ticketId]
   );
 
+  // 🔄 Render based on auth state
+  if (user?._id) {
+    return (
+      <OnboardCtaButton event={event} size={size} variant={variant} className={className}>
+        {children}
+      </OnboardCtaButton>
+    );
+  }
+
   return (
-    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setGuestMode(false); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        setOpen(v);
+        if (!v) setGuestMode(false);
+      }}
+    >
       <DialogTrigger asChild>
         <Button size={size} variant={variant} className={className}>
           {children}
@@ -254,7 +249,7 @@ export default function SmartGetTicketButton({
           </DialogDescription>
         </DialogHeader>
 
-        {/* Ticket selector (stay outside the form; form consumes selectedTicket) */}
+        {/* Ticket selector */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <Label>Ticket type</Label>
@@ -269,7 +264,7 @@ export default function SmartGetTicketButton({
                     {(t.priceCents || 0) === 0
                       ? "— Free"
                       : `— ${(t.priceCents / 100).toFixed(2)} ${
-                          t.currency ? t.currency.toUpperCase() : ""
+                          t.currency?.toUpperCase() || ""
                         }`}
                   </SelectItem>
                 ))}
@@ -278,23 +273,27 @@ export default function SmartGetTicketButton({
           </div>
         </div>
 
-        {/* CTA row → swaps to form when guestMode = true */}
+        {/* CTA row or Guest form */}
         {!guestMode ? (
           <div className="flex flex-wrap gap-2">
-            <Button
-              size="lg"
-              onClick={() => setGuestMode(true)}
-              disabled={!ticketId}
-            >
+            <Button size="lg" onClick={() => setGuestMode(true)} disabled={!ticketId}>
               Continue as Guest
             </Button>
             <Button size="lg" variant="outline" asChild>
-              <a href={`/login?next=${encodeURIComponent(`/events/${event.slug || `id/${event._id}`}/onboarding`)}`}>
+              <a
+                href={`/login?next=${encodeURIComponent(
+                  `/events/${event.slug || `id/${event._id}`}/onboarding`
+                )}`}
+              >
                 Login
               </a>
             </Button>
             <Button size="lg" variant="ghost" asChild>
-              <a href={`/register?next=${encodeURIComponent(`/events/${event.slug || `id/${event._id}`}/onboarding`)}`}>
+              <a
+                href={`/register?next=${encodeURIComponent(
+                  `/events/${event.slug || `id/${event._id}`}/onboarding`
+                )}`}
+              >
                 Register
               </a>
             </Button>

@@ -1,10 +1,11 @@
 // src/context/EventContext.jsx
 import {
   createContext,
-  useContext,
+  useContext, 
   useEffect,
   useMemo,
   useReducer,
+  useCallback,
 } from "react";
 import {
   getAllEvents,
@@ -106,97 +107,97 @@ export function useEvent(id) {
 export function EventProvider({ children, autoLoad = true }) {
   const [state, dispatch] = useReducer(reducer, initialState);
 
-  async function fetchEvents() {
-    try {
-      dispatch({ type: "LOAD_START" });
-      const data = await getAllEvents();
-      dispatch({ type: "LOAD_SUCCESS", payload: data });
-    } catch (e) {
-      dispatch({
-        type: "LOAD_ERROR",
-        error: e?.message || "Failed to load events",
-      });
-    }
-  }
+  const fetchEvents = useCallback(async () => {
+     try {
+       dispatch({ type: "LOAD_START" });
+       const data = await getAllEvents();
+       dispatch({ type: "LOAD_SUCCESS", payload: data });
+     } catch (e) {
+       dispatch({
+         type: "LOAD_ERROR",
+         error: e?.message || "Failed to load events",
+       });
+     }
+}, []);
 
-  async function fetchMyEvents() {
-    try {
-      dispatch({ type: "LOAD_START" });
-      const data = await getMyOrganizing();
-      dispatch({ type: "LOAD_SUCCESS", payload: data });
-    } catch (e) {
-      dispatch({
-        type: "LOAD_ERROR",
-        error: e?.message || "Failed to load my events",
-      });
-    }
-  }
+  const fetchMyEvents = useCallback(async () => {
+     try {
+       dispatch({ type: "LOAD_START" });
+       const data = await getMyOrganizing();
+       dispatch({ type: "LOAD_SUCCESS", payload: data });
+     } catch (e) {
+       dispatch({
+         type: "LOAD_ERROR",
+         error: e?.message || "Failed to load my events",
+       });
+     }
+
+  }, []);
 
   // Update (optimistic)
-  async function updateEvent(id, patch) {
-    try {
-      dispatch({ type: "UPDATE_START" });
-      dispatch({ type: "UPDATE_OPTIMISTIC", payload: { _id: id, ...patch } });
-      const saved = await apiUpdateEvent(id, patch);
-      dispatch({ type: "UPDATE_SUCCESS", payload: saved });
-      return saved;
-    } catch (e) {
-      const msg = e?.message || "Failed to update event";
-      dispatch({ type: "UPDATE_ERROR", error: msg });
-      toast.error(msg);
-      throw e;
-    }
-  }
+   const updateEvent = useCallback(async (id, patch) => {
+     try {
+       dispatch({ type: "UPDATE_START" });
+       dispatch({ type: "UPDATE_OPTIMISTIC", payload: { _id: id, ...patch } });
+       const saved = await apiUpdateEvent(id, patch);
+       dispatch({ type: "UPDATE_SUCCESS", payload: saved });
+       return saved;
+     } catch (e) {
+       const msg = e?.message || "Failed to update event";
+       dispatch({ type: "UPDATE_ERROR", error: msg });
+       toast.error(msg);
+       throw e;
+     }
+
+  }, []);
 
   // Create
-  async function createEvent(payload) {
-    try {
-      dispatch({ type: "CREATE_START" });
-      const created = await apiCreateEvent(payload);
-      dispatch({ type: "CREATE_SUCCESS", payload: created });
-      return created;
-    } catch (e) {
-      const msg = e?.message || "Failed to create event";
-      dispatch({ type: "CREATE_ERROR", error: msg });
-      toast.error(msg);
-      throw e;
-    }
-  }
+   const createEvent = useCallback(async (payload) => {
+     try {
+       dispatch({ type: "CREATE_START" });
+       const created = await apiCreateEvent(payload);
+       dispatch({ type: "CREATE_SUCCESS", payload: created });
+       return created;
+     } catch (e) {
+       const msg = e?.message || "Failed to create event";
+       dispatch({ type: "CREATE_ERROR", error: msg });
+       toast.error(msg);
+       throw e;
+     }
+  }, []);
 
   // 🔥 Delete
-  async function deleteEvent(id) {
-    if (!id) return;
-    try {
-      dispatch({ type: "DELETE_START", id });
-      await deleteEventById(id);
-      dispatch({ type: "DELETE_SUCCESS", id });
-      toast.success("Event deleted");
-      // If you prefer, you can re-fetch instead of optimistic removal:
-      // await fetchMyEvents();
-      return true;
-    } catch (e) {
-      const msg =
-        e?.response?.data?.message ||
-        e?.message ||
-        "Failed to delete event";
-      dispatch({ type: "DELETE_ERROR", error: msg });
-      toast.error(msg);
-      throw e;
-    }
-  }
+   const deleteEvent = useCallback(async (id) => {
+     if (!id) return;
+     try {
+       dispatch({ type: "DELETE_START", id });
+       await deleteEventById(id);
+       dispatch({ type: "DELETE_SUCCESS", id });
+       toast.success("Event deleted");
+       return true;
+     } catch (e) {
+       const msg =
+         e?.response?.data?.message ||
+         e?.message ||
+         "Failed to delete event";
+       dispatch({ type: "DELETE_ERROR", error: msg });
+       toast.error(msg);
+       throw e;
+     }
+ }, []);
 
   useEffect(() => {
     if (autoLoad) fetchEvents();
-  }, [autoLoad]);
+  },  [autoLoad, fetchEvents]);
 
-  const value = {
-    state,
-    fetchEvents,
-    fetchMyEvents,
-    updateEvent,
-    createEvent,
-    deleteEvent, // ← expose delete
-  };
+ const value = useMemo(() => ({
+   state,
+   fetchEvents,
+   fetchMyEvents,
+   updateEvent,
+   createEvent,
+   deleteEvent,
+ }), [state, fetchEvents, fetchMyEvents, updateEvent, createEvent, deleteEvent]);
 
   return <EventContext.Provider value={value}>{children}</EventContext.Provider>;
 }

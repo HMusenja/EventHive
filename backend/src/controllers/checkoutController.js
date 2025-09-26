@@ -6,6 +6,7 @@ import Ticket from "../models/Ticket.js";
 import Order from "../models/Order.js";
 import Attendee from "../models/Attendee.js";
 import { emailTicketsForOrder } from "./emailHelpers.js";
+import EventMember from "../models/EventMember.js";
 
 function apiError(code, message, status = 400, extra = {}) {
   const err = new Error(message);
@@ -13,6 +14,30 @@ function apiError(code, message, status = 400, extra = {}) {
   err.code = code;
   Object.assign(err, extra);
   return err;
+}
+
+async function ensureApprovedMember(eventId, userId) {
+  // Supports legacy dual fields {event,eventId} & {user,userId}
+  return EventMember.findOneAndUpdate(
+    {
+      $and: [
+        { $or: [{ eventId }, { event: eventId }] },
+        { $or: [{ userId }, { user: userId }] },
+      ],
+    },
+    {
+      $setOnInsert: {
+        eventId,
+        event: eventId,
+        userId,
+        user: userId,
+        onboardingComplete: false,
+      },
+      $addToSet: { roles: "attendee" },
+      $set: { status: "approved" },
+    },
+    { new: true, upsert: true }
+  );
 }
 
 async function safeEmail(orderId) {
@@ -31,7 +56,7 @@ function generateTicketRef() {
 
 function calcAvailable(ticket) {
   const total = ticket.quantityTotal ?? 0;
-  const sold  = ticket.quantitySold ?? 0;
+  const sold = ticket.quantitySold ?? 0;
   return Math.max(total - sold, 0);
 }
 
@@ -39,7 +64,11 @@ async function findOrCreateGuestUser({ email, fullName }) {
   const existing = await User.findOne({ email }).select("+password isGuest");
   if (existing) {
     if (existing.isGuest === false) {
-      throw apiError("EMAIL_EXISTS", "Email already exists. Please login or register.", 400);
+      throw apiError(
+        "EMAIL_EXISTS",
+        "Email already exists. Please login or register.",
+        400
+      );
     }
     if (!existing.fullName && fullName) {
       existing.fullName = fullName;
@@ -70,7 +99,7 @@ async function orderSnapshot(orderId) {
     eventId: o.eventId,
     ticketId: o.ticketId,
     // include each ticket's subdoc _id if present
-    tickets: (o.tickets || []).map(t => ({
+    tickets: (o.tickets || []).map((t) => ({
       _id: t._id ? String(t._id) : undefined,
       ticketId: t.ticketId ? String(t.ticketId) : undefined,
       ref: t.ref,
@@ -91,14 +120,16 @@ async function orderSnapshot(orderId) {
 export async function createCheckout(req, res, next) {
   try {
     const authUser = req.user;
-    if (!authUser?._id) throw apiError("UNAUTHENTICATED", "Login required", 401);
+    if (!authUser?._id)
+      throw apiError("UNAUTHENTICATED", "Login required", 401);
 
     const { eventId, ticketId, quantity } = req.body || {};
     if (!eventId) throw apiError("INVALID_EVENT", "eventId is required");
     if (!ticketId) throw apiError("INVALID_TICKET", "ticketId is required");
 
     const qty = Math.max(parseInt(quantity || 1, 10), 1);
-    if (!Number.isInteger(qty) || qty < 1) throw apiError("INVALID_QUANTITY", "Quantity must be a positive integer");
+    if (!Number.isInteger(qty) || qty < 1)
+      throw apiError("INVALID_QUANTITY", "Quantity must be a positive integer");
 
     // Validate event & ticket
     const [event, ticket] = await Promise.all([
@@ -107,9 +138,14 @@ export async function createCheckout(req, res, next) {
     ]);
     if (!event) throw apiError("INVALID_EVENT", "Event not found", 404);
     if (!ticket || String(ticket.eventId) !== String(eventId)) {
-      throw apiError("INVALID_TICKET", "Ticket does not belong to this event", 404);
+      throw apiError(
+        "INVALID_TICKET",
+        "Ticket does not belong to this event",
+        404
+      );
     }
-    if (ticket.isActive === false) throw apiError("INACTIVE_TICKET", "Ticket is not active");
+    if (ticket.isActive === false)
+      throw apiError("INACTIVE_TICKET", "Ticket is not active");
 
     // Sales window
     const now = new Date();
@@ -120,7 +156,8 @@ export async function createCheckout(req, res, next) {
 
     // Capacity
     const remaining = calcAvailable(ticket);
-    if (qty > remaining) throw apiError("SOLD_OUT", `Only ${remaining} tickets remaining`);
+    if (qty > remaining)
+      throw apiError("SOLD_OUT", `Only ${remaining} tickets remaining`);
 
     const isFree = (ticket.priceCents || 0) === 0;
     const amountTotal = (ticket.priceCents || 0) * qty;
@@ -150,16 +187,29 @@ export async function createCheckout(req, res, next) {
       try {
         await Attendee.findOneAndUpdate(
           { eventId, userId: authUser._id },
-          { $setOnInsert: { roles: ["attendee"], status: "approved" }, $inc: { quantity: qty } },
+          {
+            $setOnInsert: { roles: ["attendee"], status: "approved" },
+            $inc: { quantity: qty },
+          },
           { upsert: true, new: true }
         );
       } catch (e) {
         // tolerate duplicate-key races
         if (e?.code !== 11000) throw e;
       }
+      // Ensure EventMember exists and is approved
+      try {
+        await ensureApprovedMember(eventId, authUser._id);
+      } catch (e) {
+        // Don't fail the order if member upsert races; log only
+        console.error("[ensureApprovedMember] failed", e?.message);
+      }
 
       try {
-        await Ticket.updateOne({ _id: ticket._id }, { $inc: { quantitySold: qty } });
+        await Ticket.updateOne(
+          { _id: ticket._id },
+          { $inc: { quantitySold: qty } }
+        );
       } catch (e) {
         if (e?.code !== 11000) throw e;
       }
@@ -167,7 +217,9 @@ export async function createCheckout(req, res, next) {
       await safeEmail(order._id);
 
       const snap = await orderSnapshot(order._id);
-      return res.status(200).json(snap ?? { success: true, mode: "free", orderId: order._id });
+      return res
+        .status(200)
+        .json(snap ?? { success: true, mode: "free", orderId: order._id });
     }
 
     // Paid → create awaiting_payment and return dummy checkout URL
@@ -201,7 +253,8 @@ export async function createGuestCheckout(req, res, next) {
     if (!email) throw apiError("INVALID_EMAIL", "email is required");
 
     const qty = Math.max(parseInt(quantity || 1, 10), 1);
-    if (!Number.isInteger(qty) || qty < 1) throw apiError("INVALID_QUANTITY", "Quantity must be a positive integer");
+    if (!Number.isInteger(qty) || qty < 1)
+      throw apiError("INVALID_QUANTITY", "Quantity must be a positive integer");
     const cleanEmail = String(email).trim().toLowerCase();
 
     // Validate event & ticket
@@ -211,9 +264,14 @@ export async function createGuestCheckout(req, res, next) {
     ]);
     if (!event) throw apiError("INVALID_EVENT", "Event not found", 404);
     if (!ticket || String(ticket.eventId) !== String(eventId)) {
-      throw apiError("INVALID_TICKET", "Ticket does not belong to this event", 404);
+      throw apiError(
+        "INVALID_TICKET",
+        "Ticket does not belong to this event",
+        404
+      );
     }
-    if (ticket.isActive === false) throw apiError("INACTIVE_TICKET", "Ticket is not active");
+    if (ticket.isActive === false)
+      throw apiError("INACTIVE_TICKET", "Ticket is not active");
 
     // Sales window (optional strictness)
     const now = new Date();
@@ -224,7 +282,8 @@ export async function createGuestCheckout(req, res, next) {
 
     // Capacity
     const remaining = calcAvailable(ticket);
-    if (qty > remaining) throw apiError("SOLD_OUT", `Only ${remaining} tickets remaining`);
+    if (qty > remaining)
+      throw apiError("SOLD_OUT", `Only ${remaining} tickets remaining`);
 
     // Guest user logic (blocks existing registered emails)
     const user = await findOrCreateGuestUser({ email: cleanEmail, fullName });
@@ -264,10 +323,19 @@ export async function createGuestCheckout(req, res, next) {
       } catch (e) {
         if (e?.code !== 11000) throw e;
       }
+      // Ensure EventMember exists and is approved
+      try {
+        await ensureApprovedMember(eventId, user._id);
+      } catch (e) {
+        console.error("[ensureApprovedMember] failed", e?.message);
+      }
 
       // Increase sold
       try {
-        await Ticket.updateOne({ _id: ticket._id }, { $inc: { quantitySold: qty } });
+        await Ticket.updateOne(
+          { _id: ticket._id },
+          { $inc: { quantitySold: qty } }
+        );
       } catch (e) {
         if (e?.code !== 11000) throw e;
       }
@@ -275,12 +343,14 @@ export async function createGuestCheckout(req, res, next) {
       await safeEmail(order._id);
 
       const snap = await orderSnapshot(order._id);
-      return res.status(200).json(snap ?? {
-        success: true,
-        mode: "free",
-        orderId: order._id,
-        message: "Free ticket issued.",
-      });
+      return res.status(200).json(
+        snap ?? {
+          success: true,
+          mode: "free",
+          orderId: order._id,
+          message: "Free ticket issued.",
+        }
+      );
     }
 
     // Paid path — create an order awaiting payment
@@ -325,7 +395,11 @@ export async function completeGuestDummyPayment(req, res, next) {
     // If already processed, return snapshot (idempotent)
     if (!["awaiting_payment", "created"].includes(order.status)) {
       const snap = await orderSnapshot(orderId);
-      return res.status(200).json(snap ?? { success: true, message: `Order already ${order.status}.` });
+      return res
+        .status(200)
+        .json(
+          snap ?? { success: true, message: `Order already ${order.status}.` }
+        );
     }
 
     const ticket = await Ticket.findById(order.ticketId);
@@ -333,7 +407,8 @@ export async function completeGuestDummyPayment(req, res, next) {
 
     // Capacity re-check (race-safety)
     const remaining = calcAvailable(ticket);
-    if (order.quantity > remaining) throw apiError("SOLD_OUT", `Only ${remaining} tickets remaining`);
+    if (order.quantity > remaining)
+      throw apiError("SOLD_OUT", `Only ${remaining} tickets remaining`);
 
     // Issue tickets
     const lines = Array.from({ length: order.quantity }, () => ({
@@ -360,10 +435,18 @@ export async function completeGuestDummyPayment(req, res, next) {
       if (e?.code !== 11000) throw e;
       // else: safe to ignore (concurrent request already created/updated attendee)
     }
-
+    // Ensure EventMember exists and is approved
+    try {
+      await ensureApprovedMember(order.eventId, order.userId);
+    } catch (e) {
+      console.error("[ensureApprovedMember] failed", e?.message);
+    }
     // Increment sold — tolerate duplicate races
     try {
-      await Ticket.updateOne({ _id: ticket._id }, { $inc: { quantitySold: order.quantity } });
+      await Ticket.updateOne(
+        { _id: ticket._id },
+        { $inc: { quantitySold: order.quantity } }
+      );
     } catch (e) {
       if (e?.code !== 11000) throw e;
     }
@@ -371,18 +454,24 @@ export async function completeGuestDummyPayment(req, res, next) {
     await safeEmail(order._id);
 
     const snap = await orderSnapshot(order._id);
-    return res.status(200).json(snap ?? {
-      success: true,
-      mode: "paid-dummy",
-      orderId: order._id,
-      message: "Payment simulated, tickets issued, attendee granted.",
-    });
+    return res.status(200).json(
+      snap ?? {
+        success: true,
+        mode: "paid-dummy",
+        orderId: order._id,
+        message: "Payment simulated, tickets issued, attendee granted.",
+      }
+    );
   } catch (err) {
     // If a duplicate key error leaks here, read the snapshot and return success
     if (err?.code === 11000 && req?.body?.orderId) {
       try {
         const snap = await orderSnapshot(req.body.orderId);
-        return res.status(200).json(snap ?? { success: true, already: true, orderId: req.body.orderId });
+        return res
+          .status(200)
+          .json(
+            snap ?? { success: true, already: true, orderId: req.body.orderId }
+          );
       } catch (inner) {
         // fallthrough to next(err)
       }

@@ -36,6 +36,7 @@ const AttendeeSchema = new Schema(
 // Fast count queries
 AttendeeSchema.index({ eventId: 1, status: 1 });
 AttendeeSchema.index({ eventId: 1, userId: 1 }, { unique: true });
+AttendeeSchema.index({ userId: 1, roles: 1 });
 AttendeeSchema.index({ eventId: 1, checkedInAt: 1 }); // optional but handy
 
 

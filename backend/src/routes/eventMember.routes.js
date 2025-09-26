@@ -9,6 +9,7 @@ import {
   upsertEventMemberByEmail,
   updateEventMember,
   requireOrganizerForEvent,
+    updateMyEventProfile,
 } from "../controllers/eventMemberController.js";
 
 const router = express.Router();
@@ -39,5 +40,6 @@ router.patch(
   requireOrganizerForEvent,
   updateEventMember
 );
+router.put("/events/:eventId/profile", checkToken, updateMyEventProfile);
 
 export default router;

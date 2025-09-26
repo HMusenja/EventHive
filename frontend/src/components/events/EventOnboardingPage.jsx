@@ -7,22 +7,24 @@ import {
   invalidateMyEventMemberCache,
 } from "@/api/onboardingApi";
 import { applyToEvent } from "@/api/eventMemberApi";
+import { getMyProfile, updateMyProfile } from "@/api/profileApi";
+import { useProfile } from "@/context/ProfileContext";
 import StepHeader from "@/components/onboarding/StepHeader";
 import ProfileStep from "@/components/onboarding/ProfileStep";
 import InterestsStep from "@/components/onboarding/InterestsStep";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 
-/**
- * Onboarding flow (2 steps) with rollout guard:
- * - If onboarding is disabled for the event (or via QA override), redirect to event home.
- */
-
-// helpers for diffs.....................................................................
+/* ---------------- helpers for tag diffs ---------------- */
 const normalizeTagLocal = (s) =>
-  String(s || "").toLowerCase().trim().replace(/\s+/g, " ");
+  String(s || "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, " ");
 const normTags = (arr) =>
-  Array.from(new Set((Array.isArray(arr) ? arr : []).map(normalizeTagLocal))).sort();
+  Array.from(
+    new Set((Array.isArray(arr) ? arr : []).map(normalizeTagLocal))
+  ).sort();
 const eqTags = (a, b) => {
   const A = normTags(a);
   const B = normTags(b);
@@ -31,31 +33,39 @@ const eqTags = (a, b) => {
   return true;
 };
 
+/**
+ * Onboarding flow (2 steps) with rollout guard:
+ * - Step 1: Edit event-scoped bio (saved on EventMember)
+ * - Step 2: Edit user-scoped interests (saved on User)
+ * - If onboarding disabled → redirect to event home
+ */
 export default function EventOnboardingPage() {
   const { slug } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
+  const { profile } = useProfile();
 
-  const [loading, setLoading] = useState(true); // isFetching
-  const [saving, setSaving] = useState(false);  // isSaving
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   const [event, setEvent] = useState(null);
-  const [me, setMe] = useState(null);
+  const [me, setMe] = useState(null); // cached event-member payload (for bio)
 
   // local form state
   const [name, setName] = useState("");
   const [avatar, setAvatar] = useState("");
+
   const [bio, setBio] = useState("");
   const [bioError, setBioError] = useState(false);
-  const [interests, setInterests] = useState([]); // normalized array
+
+  // USER-scoped interests only
+  const [interests, setInterests] = useState([]);
   const [suggestedDefaults, setSuggestedDefaults] = useState([]);
 
   const baselineRef = useRef({ bio: "", interests: [] });
   const [locked, setLocked] = useState(false); // access lost (403) → disable UI
-  const [invalidTags, setInvalidTags] = useState([]); // from 400 payload
-
-  // wizard
+  const [invalidTags, setInvalidTags] = useState([]); // from 400 payload (interests)
   const [step, setStep] = useState(1);
   const [saveError, setSaveError] = useState("");
 
@@ -65,7 +75,7 @@ export default function EventOnboardingPage() {
       try {
         setLoading(true);
 
-        // 1) resolve event by slug → id
+        // 1) Resolve event by slug → id
         const ev = await getEvent(slug);
         if (!alive) return;
         if (!ev?._id) throw new Error("Event not found");
@@ -79,47 +89,67 @@ export default function EventOnboardingPage() {
         const FORCE_OFF =
           qs.get("onboarding") === "0" ||
           import.meta.env.VITE_ONBOARDING_FORCE_DISABLE === "1";
-        const onboardingEnabled =
-          FORCE_ON ? true : FORCE_OFF ? false : ev?.onboardingEnabled !== false;
+        const onboardingEnabled = FORCE_ON
+          ? true
+          : FORCE_OFF
+            ? false
+            : ev?.onboardingEnabled !== false;
 
         if (!onboardingEnabled) {
-          // Redirect away if disabled
           return navigate(`/events/${slug}`, { replace: true });
         }
+        // ✅ global one-time guard: if user has already onboarded anywhere, skip
+      if (profile?.hasOnboarded) {
+        return navigate(`/events/${slug}/tickets`, { replace: true });
+      }
 
-        // 2) fetch my membership/profile defaults (null if none)
-        let mine = null;
+        // 2) Fetch membership (event-scoped data) + User profile (user-scoped interests)
+        let memberPayload = null;
         try {
-          mine = await getMyEventMemberCached(ev._id); // ← cached for 60s
+          memberPayload = await getMyEventMemberCached(ev._id); // cached for 60s
         } catch {
-          mine = null;
+          memberPayload = null;
         }
         if (!alive) return;
 
-        setMe(mine || null);
+        await getMyProfile();
 
-        // Prefill from server (fallbacks to empty)
-        setName(mine?.profile?.name || "");
-        setAvatar(mine?.profile?.avatar || "");
+        setMe(memberPayload || null);
 
-        // after fetching /me (prefill)
-        setBio(mine?.eventMember?.bio || "");
-        const hasMemberInterests =
-          Array.isArray(mine?.eventMember?.interests) &&
-          mine.eventMember.interests.length > 0;
-        const defaultsFromUser = Array.isArray(mine?.defaults?.interests)
-          ? mine.defaults.interests
+        // Prefill read-only identity (from membership defaults if present)
+        setName(memberPayload?.profile?.name || profile?.fullName || "");
+        setAvatar(memberPayload?.profile?.avatar || profile?.avatar || "");
+
+        // Event-scoped bio
+        const initialBio = memberPayload?.eventMember?.bio || "";
+        setBio(initialBio);
+
+        // USER-scoped interests
+        const userInterests = Array.isArray(profile?.interests)
+          ? profile.interests
           : [];
-        // Selected: only the member’s own interests (if any)
-        setInterests(hasMemberInterests ? mine.eventMember.interests : []);
-        // Suggestions: user defaults if member has none (not auto-committed)
-        setSuggestedDefaults(hasMemberInterests ? [] : defaultsFromUser);
+        setInterests(userInterests);
 
-        // set baseline for diffing on save
+        // Suggestions: you can surface the user's own interests as clickable defaults,
+        // or compute trending per event. Keep empty to avoid visual noise.
+        setSuggestedDefaults([]);
+
+        // Baseline for diffing on save
         baselineRef.current = {
-          bio: String(mine?.eventMember?.bio || "").trim(),
-          interests: normTags(hasMemberInterests ? mine.eventMember.interests : []),
+          bio: String(initialBio).trim(),
+          interests: normTags(userInterests),
         };
+        // ✅ Auto-skip logic
+        const completedFlag =
+          memberPayload?.eventMember?.onboardingComplete === true;
+        const heuristicallyComplete =
+          String(initialBio).trim().length > 0 &&
+          (userInterests?.length || 0) > 0;
+
+        if (completedFlag || heuristicallyComplete) {
+          // Go straight to tickets (or event page if you prefer)
+          return navigate(`/events/${slug}/tickets`, { replace: true });
+        }
       } catch (err) {
         console.error(err);
         toast({
@@ -130,7 +160,6 @@ export default function EventOnboardingPage() {
               : "Please check your access and try again.",
           variant: "destructive",
         });
-        // Fail-safe: go back to event page if we can’t load
         navigate(`/events/${slug}`);
       } finally {
         if (alive) setLoading(false);
@@ -139,7 +168,7 @@ export default function EventOnboardingPage() {
     return () => {
       alive = false;
     };
-  }, [slug, navigate, toast, location.search]);
+  }, [slug, navigate, toast, location.search, profile?.hasOnboarded]);
 
   // Step 1 → Step 2
   function handleContinueFromBio() {
@@ -155,49 +184,38 @@ export default function EventOnboardingPage() {
     navigate(`/events/${slug}/onboarding`, { replace: true });
   }
 
-  // Final save (Step 2)
+  // Final save (Step 2) — interests (User) + bio (EventMember)
   async function handleSaveInterests(current) {
     try {
       setSaving(true);
       setSaveError("");
       setInvalidTags([]);
 
-      // —— build delta only ——
       const nextBio = String(bio || "").trim();
       const nextTags = Array.isArray(current) ? current : [];
-      const payload = {};
-      if (nextBio !== baselineRef.current.bio) payload.bio = nextBio;
-      if (!eqTags(nextTags, baselineRef.current.interests)) payload.interests = nextTags;
+
+      const bioChanged = nextBio !== baselineRef.current.bio;
+      const interestsChanged = !eqTags(nextTags, baselineRef.current.interests);
 
       // If nothing changed, just proceed to tickets
-      if (!Object.keys(payload).length) {
+      if (!bioChanged && !interestsChanged) {
         invalidateMyEventMemberCache(event._id);
         return navigate(`/events/${slug}/tickets`, { replace: true });
       }
 
-      // 1) Try to save profile first (if backend allows it pre-membership)
-      let saved = false;
-      try {
-        await updateMyEventProfile(event._id, payload);
-        saved = true;
-      } catch (e) {
-        const status = e?.response?.status;
-        if (status === 401) {
-          const next = encodeURIComponent(`/events/${slug}/onboarding`);
-          return navigate(`/login?next=${next}`);
-        }
-      }
-
-      // 2) Ensure membership exists (apply is idempotent)
+      // 1) Ensure membership exists (idempotent)
       await applyToEvent(event._id);
 
-      // 3) Retry profile save once if it didn't save earlier
-      if (!saved) {
+      // 2) Save event bio if changed (event-scoped)
+      if (bioChanged) {
         try {
-          await updateMyEventProfile(event._id, payload);
-          saved = true;
-        } catch (e2) {
-          const status = e2?.response?.status;
+          await updateMyEventProfile(event._id, {
+            bio: nextBio,
+            onboardingComplete: true,
+          });
+          await updateMyProfile({ bio: nextBio });
+        } catch (e) {
+          const status = e?.response?.status;
           if (status === 401) {
             const next = encodeURIComponent(`/events/${slug}/onboarding`);
             return navigate(`/login?next=${next}`);
@@ -205,24 +223,55 @@ export default function EventOnboardingPage() {
           if (status === 403) {
             setLocked(true);
             setSaveError(
-              e2?.response?.data?.message ||
+              e?.response?.data?.message ||
                 "You don’t have permission to update this profile for this event."
             );
             return;
           }
+          setSaveError(
+            e?.response?.data?.message ||
+              e.message ||
+              "Couldn’t save bio. Try again."
+          );
+          return;
+        }
+      }
+
+      // 3) Save user interests if changed (user-scoped)
+      if (interestsChanged) {
+        try {
+          await updateMyProfile({ interests: nextTags });
+        } catch (e3) {
+          const status = e3?.response?.status;
+          if (status === 401) {
+            const next = encodeURIComponent(`/events/${slug}/onboarding`);
+            return navigate(`/login?next=${next}`);
+          }
           if (status === 400) {
             const msg =
-              e2?.response?.data?.message ||
-              "Some of your inputs didn’t pass validation.";
-            const bad = e2?.response?.data?.invalidTags || [];
+              e3?.response?.data?.message ||
+              "Some inputs didn’t pass validation.";
+            const bad = e3?.response?.data?.invalidTags || [];
             setInvalidTags(bad);
-            setSaveError(bad.length ? `${msg} Invalid: ${bad.join(", ")}` : msg);
+            setSaveError(
+              bad.length ? `${msg} Invalid: ${bad.join(", ")}` : msg
+            );
             return;
           }
           setSaveError(
-            e2?.response?.data?.message || e2.message || "Couldn’t save, try again."
+            e3?.response?.data?.message ||
+              e3.message ||
+              "Couldn’t save interests."
           );
           return;
+        }
+        // If bio didn’t change, still flip the completion flag now
+        if (!bioChanged) {
+          try {
+            await updateMyEventProfile(event._id, { onboardingComplete: true });
+          } catch {
+            // non-blocking: if this fails, user can still proceed
+          }
         }
       }
 
@@ -243,7 +292,11 @@ export default function EventOnboardingPage() {
   if (loading) {
     return (
       <div className="max-w-4xl mx-auto p-6">
-        <StepHeader step={1} title="Set up your profile" subtitle="Tell people a bit about you" />
+        <StepHeader
+          step={1}
+          title="Set up your profile"
+          subtitle="Tell people a bit about you"
+        />
         <div className="flex items-center gap-4">
           <Skeleton className="h-14 w-14 rounded-full" />
           <div className="space-y-2 w-56">
@@ -300,18 +353,24 @@ export default function EventOnboardingPage() {
           busy={saving}
         />
       ) : (
-        <InterestsStep
-          eventId={event._id}
-          value={interests}
-          onChange={setInterests}
-          onBack={() => setStep(1)}
-          onSave={handleSaveInterests}
-          saving={saving}
-          error={saveError}
-          invalidTags={invalidTags}
-          setError={setSaveError}
-          suggestedDefaults={suggestedDefaults}
-        />
+        <div className="space-y-2">
+          <InterestsStep
+            eventId={event._id} // still useful for autocomplete; not used for saving
+            value={interests}
+            onChange={setInterests}
+            onBack={() => setStep(1)}
+            onSave={handleSaveInterests}
+            saving={saving}
+            error={saveError}
+            invalidTags={invalidTags}
+            setError={setSaveError}
+            suggestedDefaults={suggestedDefaults}
+          />
+          <p className="text-xs text-muted-foreground">
+            Note: Interests are saved to your global profile and used across all
+            events.
+          </p>
+        </div>
       )}
     </div>
   );

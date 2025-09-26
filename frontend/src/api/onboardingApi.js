@@ -1,4 +1,4 @@
-import api from "@/lib/axios"; // ← use the configured instance (baseURL: "/api", withCredentials: true)
+import axios from "axios"; // ← use the configured instance (baseURL: "/api", withCredentials: true)
 
 /** ---------- /me memo cache (60s by default) ---------- */
 const meCache = new Map(); // key: eventId, value: { data, expiresAt }
@@ -12,7 +12,7 @@ export async function getMyEventMember(eventId) {
   if (!eventId) return null;
   try {
     // IMPORTANT: no leading "/api" because api has baseURL="/api"
-    const { data } = await api.get(`events/${eventId}/me`);
+    const { data } = await axios.get(`api/events/${eventId}/me`);
     // Server may return { isMember:false } when not a member.
     if (data && data.isMember === false) return null;
     return data; // { isMember:true, _id, role, status } or whatever your controller returns
@@ -44,14 +44,14 @@ export async function getMyEventMemberCached(eventId, { ttlMs = 60_000 } = {}) {
 // Profile update for the current user within an event
 export async function updateMyEventProfile(eventId, payload) {
   if (!eventId) throw new Error("eventId is required");
-  const { data } = await api.put(`events/${eventId}/attendee/profile`, payload);
+  const { data } = await axios.put(`api/events/${eventId}/attendee/profile`, payload);
   return data;
 }
 
 // Tag suggestions (kept as-is, just remove the leading /api)
 export async function suggestTags(eventId, q) {
   try {
-    const { data } = await api.get(`tags/suggest`, { params: { eventId, q } });
+    const { data } = await axios.get(`api/tags/suggest`, { params: { eventId, q } });
     return data?.tags || [];
   } catch {
     return [];

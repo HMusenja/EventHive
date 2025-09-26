@@ -1,3 +1,4 @@
+// src/components/nav/Navbar.jsx
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,8 +9,6 @@ import {
   Clock,
   ChevronDown,
   UserRound,
-  Sun,
-  Moon,
   MessageSquareText,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
@@ -21,7 +20,6 @@ import {
   SheetHeader,
   SheetTitle,
   SheetClose,
-  SheetDescription,
 } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -32,12 +30,13 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useTheme } from "@/context/ThemeContext";
 import ThemeToggle from "./ThemeToggle";
 import AuthModal from "../AuthModal";
 import GlobalChatButton from "@/components/nav/GlobalChatButton";
 import { useToast } from "@/hooks/use-toast";
+
+import SafeAvatar from "@/shared/SafeAvatar";
 
 function relativeTime(ts) {
   if (!ts) return "Just now";
@@ -106,11 +105,6 @@ export default function Navbar() {
     return relativeTime(ts);
   }, [user]);
 
-  const avatarLetter = useMemo(() => {
-    const src = user?.fullName || user?.username || user?.email || "U";
-    return src.trim().charAt(0).toUpperCase();
-  }, [user]);
-
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -158,19 +152,12 @@ export default function Navbar() {
             {/* ⬇️ Global Chat */}
             <GlobalChatButton />
 
+            {/* Desktop: user dropdown */}
             <div className="hidden md:flex items-center">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button className="inline-flex items-center gap-2 rounded-xl border border-border px-2.5 py-1.5 hover:bg-muted transition">
-                    <Avatar className="h-7 w-7">
-                      {user?.avatarUrl ? (
-                        <AvatarImage src={user.avatarUrl} alt={displayName} />
-                      ) : (
-                        <AvatarFallback className="text-sm">
-                          {avatarLetter}
-                        </AvatarFallback>
-                      )}
-                    </Avatar>
+                  <SafeAvatar src={user?.avatarUrl} name={user?.displayName} className="h-7 w-7" />
                     <span className="text-sm font-medium">{displayName}</span>
                     <ChevronDown className="h-4 w-4" />
                   </button>
@@ -193,16 +180,20 @@ export default function Navbar() {
                     </>
                   ) : (
                     <>
-                      <DropdownMenuItem onClick={() => {
-                        setAuthMode("login");
-                        setAuthOpen(true);
-                      }}>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setAuthMode("login");
+                          setAuthOpen(true);
+                        }}
+                      >
                         <User className="mr-2 h-4 w-4" /> Sign in
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => {
-                        setAuthMode("register");
-                        setAuthOpen(true);
-                      }}>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setAuthMode("register");
+                          setAuthOpen(true);
+                        }}
+                      >
                         <User className="mr-2 h-4 w-4" /> Register
                       </DropdownMenuItem>
                     </>
@@ -231,13 +222,7 @@ export default function Navbar() {
                 <div className="mt-6 space-y-4">
                   {/* User header */}
                   <div className="flex items-center gap-3">
-                    <Avatar className="h-9 w-9">
-                      {user?.avatarUrl ? (
-                        <AvatarImage src={user.avatarUrl} alt={displayName} />
-                      ) : (
-                        <AvatarFallback>{avatarLetter}</AvatarFallback>
-                      )}
-                    </Avatar>
+                  <SafeAvatar src={user?.avatarUrl} name={user?.displayName} className="h-7 w-7" />
                     <div className="text-sm">
                       <div className="font-semibold">{displayName}</div>
                       <div className="text-muted-foreground flex items-center gap-1">
@@ -285,18 +270,24 @@ export default function Navbar() {
                   ) : (
                     <div className="grid gap-3">
                       <SheetClose asChild>
-                        <Button variant="outline" onClick={() => {
-                          setAuthMode("login");
-                          setAuthOpen(true);
-                        }}>
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setAuthMode("login");
+                            setAuthOpen(true);
+                          }}
+                        >
                           <User className="mr-2 h-4 w-4" /> Sign in
                         </Button>
                       </SheetClose>
                       <SheetClose asChild>
-                        <Button className="border-0 bg-gradient-electric text-electric-foreground hover:shadow-electric" onClick={() => {
-                          setAuthMode("register");
-                          setAuthOpen(true);
-                        }}>
+                        <Button
+                          className="border-0 bg-gradient-electric text-electric-foreground hover:shadow-electric"
+                          onClick={() => {
+                            setAuthMode("register");
+                            setAuthOpen(true);
+                          }}
+                        >
                           Register
                         </Button>
                       </SheetClose>

@@ -24,6 +24,18 @@ const initialState = {
   error: null,
 };
 
+// --- normalize fields coming from API so UI has stable keys ---
+function normalizeUser(u = {}) {
+  if (!u) return null;
+  return {
+    ...u,
+    // unify avatar field names to a single key the UI can rely on
+    avatarUrl: u.avatar || u.profilePicture || u.avatarUrl || "",
+    // a friendly display name used across the app
+    displayName: u.fullName || u.username || u.email || "User",
+  };
+}
+
 async function attachOrganizerFlag(user) {
   if (!user?._id) return { ...user, isOrganizer: false };
 
@@ -71,7 +83,9 @@ export const AuthProvider = ({ children }) => {
       //const res = await getCurrentUser();
      //const rawUser = res.data?.user;
 
-      const userWithFlag = await attachOrganizerFlag(rawUser);
+      // normalize first → attach flags second
+      const normalized = normalizeUser(rawUser);
+      const userWithFlag = await attachOrganizerFlag(normalized);
 
       dispatch({ type: "AUTH_SUCCESS", payload: userWithFlag });
 
@@ -116,7 +130,8 @@ export const AuthProvider = ({ children }) => {
       }
 
       const rawUser = res?.data?.user;
-      const userWithFlag = await attachOrganizerFlag(rawUser);
+      const normalized = normalizeUser(rawUser);
+      const userWithFlag = await attachOrganizerFlag(normalized);
 
       dispatch({ type: "AUTH_SUCCESS", payload: userWithFlag });
       refreshSocketAuth({ force: true }); // re-auth socket to new user
@@ -159,7 +174,8 @@ export const AuthProvider = ({ children }) => {
       }
 
       const rawUser = res?.data?.user;
-      const userWithFlag = await attachOrganizerFlag(rawUser);
+       const normalized = normalizeUser(rawUser);
+      const userWithFlag = await attachOrganizerFlag(normalized);
 
       dispatch({ type: "AUTH_SUCCESS", payload: userWithFlag });
       refreshSocketAuth({ force: true }); // re-auth socket to new user
@@ -212,7 +228,7 @@ dispatch({
         refreshMe: fetchUser,
         login,
         register,
-        registerLite,
+        // registerLite,
         logout,
 
       }}
@@ -234,7 +250,7 @@ export const useAuth = () => {
       refreshMe: async () => ({ ok: false }),
       login: async () => ({ ok: false }),
       register: async () => ({ ok: false }),
-      registerLite: async () => ({}),
+      // registerLite: async () => ({}),
       logout: async () => { },
     };
 

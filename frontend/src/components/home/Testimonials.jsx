@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Star } from "lucide-react";
-import api from "@/lib/axios";
+import { publicApi } from "@/api/publicApi";
+import SafeAvatar from "@/shared/SafeAvatar";
 
 //const items = [
 //  { name: "Sarah Chen", role: "Organizer", content: "EventHub transformed how I manage conferences.", bg: "bg-gradient-vibrant" },
@@ -15,7 +16,7 @@ export default function Testimonials() {
   useEffect(() => {
     (async () => {
       try {
-        const { data } = await api.get("feedback");
+        const { data } = await publicApi.get("/feedback");
         setItems(data);
       } catch (e) {
         console.error("Failed to load feedback", e);
@@ -42,7 +43,11 @@ export default function Testimonials() {
                 </div>
                 <p className="mb-6 text-muted-foreground">“{t.content}”</p>
                 <div className="flex items-center">
-                  <div className="mr-3 h-10 w-10 rounded-full bg-gradient-vibrant" />
+                  <SafeAvatar
+                    src={t.avatar}
+                    name={t.name}
+                    className="mr-3 h-10 w-10"
+                  />
                   <div>
                     <p className="font-semibold">{t.name || "Anon"}</p>
                     <p className="text-sm text-muted-foreground">{t.role}</p>

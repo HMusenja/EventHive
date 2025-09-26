@@ -21,7 +21,7 @@ export default function AuthModal({
   onClose,
   initialMode = "login", // "login" | "register"
 }) {
-  const { login, register, loading, error,fetchUser } = useAuth();
+  const { login, register, loading, error, fetchUser } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -163,14 +163,16 @@ export default function AuthModal({
           </div>
 
           {/* Title + tagline */}
-          <h2 className="text-center text-2xl font-semibold tracking-tight">
-            {isLogin ? "Welcome Back" : "Create Account"}
-          </h2>
-          <p className="mt-1 text-center text-sm text-slate-600">
-            {isLogin
-              ? "Sign in to manage events, tickets, and chats."
-              : "Join EventHive to host, attend, and connect."}
-          </p>
+          <DialogHeader className="text-center">
+            <DialogTitle className="text-2xl font-semibold tracking-tight">
+              {isLogin ? "Welcome Back" : "Create Account"}
+            </DialogTitle>
+            <DialogDescription className="mt-1 text-slate-600">
+              {isLogin
+                ? "Sign in to manage events, tickets, and chats."
+                : "Join EventHive to host, attend, and connect."}
+            </DialogDescription>
+          </DialogHeader>
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
@@ -183,7 +185,9 @@ export default function AuthModal({
                     <Input
                       id="fullName"
                       value={formData.fullName}
-                      onChange={(e) => handleInputChange("fullName", e.target.value)}
+                      onChange={(e) =>
+                        handleInputChange("fullName", e.target.value)
+                      }
                       placeholder="Enter your full name"
                       className="pl-10 bg-white/90 border border-white/60 focus:bg-white focus-visible:ring-2 focus-visible:ring-indigo-400/40 placeholder:text-slate-500"
                       required
@@ -198,7 +202,9 @@ export default function AuthModal({
                     <Input
                       id="username"
                       value={formData.username}
-                      onChange={(e) => handleInputChange("username", e.target.value)}
+                      onChange={(e) =>
+                        handleInputChange("username", e.target.value)
+                      }
                       placeholder="Choose a username"
                       className="pl-10 bg-white/90 border border-white/60 focus:bg-white focus-visible:ring-2 focus-visible:ring-indigo-400/40 placeholder:text-slate-500"
                       required
@@ -238,7 +244,9 @@ export default function AuthModal({
                   type={showPassword ? "text" : "password"}
                   placeholder="Enter your password"
                   value={formData.password}
-                  onChange={(e) => handleInputChange("password", e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange("password", e.target.value)
+                  }
                   className="pl-10 pr-10 bg-white/90 border border-white/60 focus:bg-white focus-visible:ring-2 focus-visible:ring-indigo-400/40 placeholder:text-slate-500"
                   required
                   autoComplete={isLogin ? "current-password" : "new-password"}
@@ -251,21 +259,31 @@ export default function AuthModal({
                   onClick={() => setShowPassword((s) => !s)}
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
-                  {showPassword ? <EyeOff className="h-4 w-4 text-slate-500" /> : <Eye className="h-4 w-4 text-slate-500" />}
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4 text-slate-500" />
+                  ) : (
+                    <Eye className="h-4 w-4 text-slate-500" />
+                  )}
                 </Button>
               </div>
             </div>
 
             {isLogin && (
               <div className="flex justify-end -mt-1">
-                <Button type="button" variant="link" className="text-sm p-0 text-indigo-600 hover:text-indigo-600/80">
+                <Button
+                  type="button"
+                  variant="link"
+                  className="text-sm p-0 text-indigo-600 hover:text-indigo-600/80"
+                >
                   Forgot password?
                 </Button>
               </div>
             )}
 
             {(localError || error?.message) && (
-              <p className="text-sm text-destructive">{localError || error.message}</p>
+              <p className="text-sm text-destructive">
+                {localError || error.message}
+              </p>
             )}
 
             <Button
@@ -280,13 +298,21 @@ export default function AuthModal({
             disabled:opacity-60
           "
             >
-              {loading ? (isLogin ? "Signing in..." : "Creating account...") : isLogin ? "Sign In" : "Create Account"}
+              {loading
+                ? isLogin
+                  ? "Signing in..."
+                  : "Creating account..."
+                : isLogin
+                  ? "Sign In"
+                  : "Create Account"}
             </Button>
 
             <div className="relative my-6">
               <Separator className="bg-slate-200/70" />
               <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white/85 px-2 text-xs text-slate-600 rounded">
-                {isLogin ? "Don't have an account?" : "Already have an account?"}
+                {isLogin
+                  ? "Don't have an account?"
+                  : "Already have an account?"}
               </span>
             </div>
 

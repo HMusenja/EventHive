@@ -10,21 +10,27 @@ import { ThemeProvider } from "./context/ThemeContext.jsx";
 import { AttendeeProvider } from "./context/AttendeeContext.jsx";
 import { NotificationProvider } from "./context/NotificationContext.jsx";
 import { TicketProvider } from "./context/TicketContext.jsx";
+import { ProfileProvider } from "./context/ProfileContext.jsx";
+import { OrganizerTicketProvider } from "./context/OrganizerTicketContext.jsx";
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <BrowserRouter>
       <ThemeProvider>
         <AuthProvider>
-          <EventProvider>
-            <AttendeeProvider>
-                <NotificationProvider>   
-               <TicketProvider>
-                  <App />
-                </TicketProvider>
-              </NotificationProvider>
-            </AttendeeProvider>
-          </EventProvider>
+          <ProfileProvider>
+            <OrganizerTicketProvider>
+              <EventProvider>
+                <AttendeeProvider>
+                  <NotificationProvider>
+                    <TicketProvider>
+                      <App />
+                    </TicketProvider>
+                  </NotificationProvider>
+                </AttendeeProvider>
+              </EventProvider>
+            </OrganizerTicketProvider>
+          </ProfileProvider>
         </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>

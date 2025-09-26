@@ -62,13 +62,19 @@ const UserSchema = new Schema(
       enum: ["attendee", "user", "organizer", "admin"],
       default: "user",
     },
+    hasOnboarded: { type: Boolean, default: false, index: true },
+    onboardedAt: { type: Date },
 
     accountStatus: { type: String, enum: AccountStatusEnum, default: "active" },
 
     organizations: [
       {
         org: { type: ObjectId, ref: "Organization", required: true },
-        role: { type: String, enum: ["owner", "manager", "staff"], default: "staff" },
+        role: {
+          type: String,
+          enum: ["owner", "manager", "staff"],
+          default: "staff",
+        },
       },
     ],
 
@@ -79,7 +85,12 @@ const UserSchema = new Schema(
     // Profile (global)
     avatar: { type: String, default: "" },
     bio: { type: String, maxlength: 600 },
-    profileVisibility: { type: String, enum: VisibilityEnum, default: "public" },
+    interests: [{ type: String, trim: true, lowercase: true }],
+    profileVisibility: {
+      type: String,
+      enum: VisibilityEnum,
+      default: "public",
+    },
     timezone: { type: String, default: "Europe/Berlin" },
     locale: { type: String, default: "en" },
 
@@ -102,6 +113,17 @@ UserSchema.pre("save", async function (next) {
   if (!this.password) return next();
   this.password = await bcrypt.hash(this.password, 10);
   next();
+  if (Array.isArray(this.interests)) {
+    this.interests = [
+      ...new Set(
+        this.interests
+          .map((s) => String(s).trim().toLowerCase())
+          .filter(Boolean)
+          .slice(0, 25)
+      ),
+    ];
+  }
+  next();
 });
 
 UserSchema.methods.comparePassword = function (candidatePassword) {
@@ -110,4 +132,3 @@ UserSchema.methods.comparePassword = function (candidatePassword) {
 };
 
 export default model("User", UserSchema);
-

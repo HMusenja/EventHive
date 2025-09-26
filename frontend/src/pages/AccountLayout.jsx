@@ -26,13 +26,15 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import Footer from "@/components/layout/Footer";
 import { useNotifications } from "@/context/NotificationContext"; // ✅ custom hook from context
 import { useAuth } from "@/context/AuthContext";
+import { ProfileProvider } from "@/context/ProfileContext";
 
 const AccountLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const navigate = useNavigate();
-  const { user, loading, loaded , logout } = useAuth();
+  const { user, loading, loaded, logout } = useAuth();
+  const { notifications, unreadCount, markAsRead } = useNotifications();
 
-const { notifications, unreadCount, markAsRead } = useNotifications();
+  if (!loaded) return null;
 
   const navigationItems = [
     { name: "Profile", href: "/account/profile", icon: User },
@@ -64,169 +66,177 @@ const { notifications, unreadCount, markAsRead } = useNotifications();
     </nav>
   );
 
-  if (!loaded) return null;
+ 
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
-      {/* Header */}
-      <header className="sticky top-0 z-50 border-b bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-md">
-        <div className="flex h-16 items-center justify-between px-4 md:px-6">
-          {/* Mobile menu button */}
-          <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>
-            <SheetTrigger asChild className="lg:hidden">
-              <Button variant="ghost" size="icon">
-                <Menu className="h-5 w-5" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-80 p-0">
-              <div className="flex h-full flex-col">
-                <div className="flex h-16 items-center border-b px-6">
-                  <h2 className="text-lg font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                    EventHub
-                  </h2>
-                </div>
-                <div className="flex-1 overflow-auto">
-                  <NavItems
-                    mobile
-                    onItemClick={() => setIsSidebarOpen(false)}
-                  />
-                </div>
-              </div>
-            </SheetContent>
-          </Sheet>
-
-          {/* Logo */}
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              onClick={() => navigate("/")}
-              className="text-lg font-bold hover:bg-transparent p-0 h-auto"
-            >
-              <span className="bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent">
-                EventHub
-              </span>
-            </Button>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {/* 🔔 Notifications */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="relative">
-                  <Bell className="h-5 w-5" />
-                  {unreadCount > 0 && (
-                    <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
-                      {unreadCount > 99 ? "99+" : unreadCount}
-                    </span>
-                  )}
+    <ProfileProvider>
+      <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
+        {/* Header */}
+        <header className="sticky top-0 z-40 border-b bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-md">
+          <div className="flex h-16 items-center justify-between px-4 md:px-6">
+            {/* Mobile menu button */}
+            <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>
+              <SheetTrigger asChild className="lg:hidden">
+                <Button variant="ghost" size="icon">
+                  <Menu className="h-5 w-5" />
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-80" align="end">
-                <DropdownMenuLabel>Notifications</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {notifications.length === 0 && (
-                  <p className="p-4 text-sm text-muted-foreground">
-                    No notifications
-                  </p>
-                )}
-                {notifications.slice(0, 5).map((notif) => (
-                  <DropdownMenuItem
-                    key={notif._id}
-                   onClick={() => markAsRead(notif._id)}
-                    className={`flex flex-col items-start ${
-                      !notif.readAt ? "font-semibold" : "text-muted-foreground"
-                    }`}
-                  >
-                    <span>{notif.title}</span>
-                    <span className="text-xs">{notif.message}</span>
-                  </DropdownMenuItem>
-                ))}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={() => navigate("/account/notifications")}
-                  className="text-center justify-center"
-                >
-                  See all notifications
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            {/* User menu */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  className="relative h-10 w-10 rounded-full"
-                >
-                  <Avatar className="h-10 w-10 border-2 border-primary/20">
-                    <AvatarImage
-                      src={user?.avatarUrl || "/placeholder-avatar.jpg"}
-                      alt={user?.fullName}
+              </SheetTrigger>
+              <SheetContent side="left" className="w-80 p-0">
+                <div className="flex h-full flex-col">
+                  <div className="flex h-16 items-center border-b px-6">
+                    <h2 className="text-lg font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+                      EventHub
+                    </h2>
+                  </div>
+                  <div className="flex-1 overflow-auto">
+                    <NavItems
+                      mobile
+                      onItemClick={() => setIsSidebarOpen(false)}
                     />
-                    <AvatarFallback className="bg-gradient-to-br from-primary to-secondary text-primary-foreground">
-                      {user?.fullName
-                        ? user.fullName
-                            .split(" ")
-                            .map((n) => n[0])
-                            .join("")
-                            .toUpperCase()
-                        : "?"}
-                    </AvatarFallback>
-                  </Avatar>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56" align="end">
-                <div className="flex items-center justify-start gap-2 p-2">
-                  <div className="flex flex-col space-y-1 leading-none">
-                    <p className="font-medium">
-                      {user?.fullName || "Unknown User"}
-                    </p>
-                    <p className="w-[200px] truncate text-sm text-muted-foreground">
-                      {user?.email || "no-email"}
-                    </p>
                   </div>
                 </div>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate("/")}>
-                  <Home className="mr-2 h-4 w-4" />
-                  Home
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate("/account/profile")}>
-                  <User className="mr-2 h-4 w-4" />
-                  Profile
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate("/account/settings")}>
-                  <Settings className="mr-2 h-4 w-4" />
-                  Settings
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={logout} className="text-destructive">
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Sign out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+              </SheetContent>
+            </Sheet>
+
+            {/* Logo */}
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                onClick={() => navigate("/")}
+                className="text-lg font-bold hover:bg-transparent p-0 h-auto"
+              >
+                <span className="bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent">
+                  EventHub
+                </span>
+              </Button>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {/* 🔔 Notifications */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="relative">
+                    <Bell className="h-5 w-5" />
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
+                        {unreadCount > 99 ? "99+" : unreadCount}
+                      </span>
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-80" align="end">
+                  <DropdownMenuLabel>Notifications</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {notifications.length === 0 && (
+                    <p className="p-4 text-sm text-muted-foreground">
+                      No notifications
+                    </p>
+                  )}
+                  {notifications.slice(0, 5).map((notif) => (
+                    <DropdownMenuItem
+                      key={notif._id}
+                      onClick={() => markAsRead(notif._id)}
+                      className={`flex flex-col items-start ${
+                        !notif.readAt
+                          ? "font-semibold"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      <span>{notif.title}</span>
+                      <span className="text-xs">{notif.message}</span>
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => navigate("/account/notifications")}
+                    className="text-center justify-center"
+                  >
+                    See all notifications
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* User menu */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    className="relative h-10 w-10 rounded-full"
+                  >
+                    <Avatar className="h-10 w-10 border-2 border-primary/20">
+                      <AvatarImage src={user?.avatar || "/placeholder-avatar.jpg"} alt={user?.fullName} />
+                      <AvatarFallback className="bg-gradient-to-br from-primary to-secondary text-primary-foreground">
+                        {user?.fullName
+                          ? user.fullName
+                              .split(" ")
+                              .map((n) => n[0])
+                              .join("")
+                              .toUpperCase()
+                          : "?"}
+                      </AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56" align="end">
+                  <div className="flex items-center justify-start gap-2 p-2">
+                    <div className="flex flex-col space-y-1 leading-none">
+                      <p className="font-medium">
+                        {user?.fullName || "Unknown User"}
+                      </p>
+                      <p className="w-[200px] truncate text-sm text-muted-foreground">
+                        {user?.email || "no-email"}
+                      </p>
+                    </div>
+                  </div>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => navigate("/")}>
+                    <Home className="mr-2 h-4 w-4" />
+                    Home
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => navigate("/account/profile")}
+                  >
+                    <User className="mr-2 h-4 w-4" />
+                    Profile
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => navigate("/account/settings")}
+                  >
+                    <Settings className="mr-2 h-4 w-4" />
+                    Settings
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={logout}
+                    className="text-destructive"
+                  >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Sign out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
+        </header>
+
+        <div className="flex">
+          {/* Desktop Sidebar */}
+          <aside className="hidden lg:flex lg:w-64 lg:flex-col lg:border-r lg:bg-muted/30 lg:backdrop-blur">
+            <div className="flex-1 overflow-auto py-6">
+              <NavItems />
+            </div>
+          </aside>
+
+          {/* Main Content */}
+          <main className="flex-1 overflow-auto">
+            <div className="container mx-auto p-6">
+              <Outlet />
+            </div>
+          </main>
         </div>
-      </header>
-
-      <div className="flex">
-        {/* Desktop Sidebar */}
-        <aside className="hidden lg:flex lg:w-64 lg:flex-col lg:border-r lg:bg-muted/30 lg:backdrop-blur">
-          <div className="flex-1 overflow-auto py-6">
-            <NavItems />
-          </div>
-        </aside>
-
-        {/* Main Content */}
-        <main className="flex-1 overflow-auto">
-          <div className="container mx-auto p-6">
-            <Outlet />
-          </div>
-        </main>
+        <Footer />
       </div>
-      <Footer />
-    </div>
+    </ProfileProvider>
   );
 };
 

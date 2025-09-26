@@ -95,6 +95,7 @@ export default memo(function EventCard({
   onView, // optional override handlers
   onEdit,
   onDelete,
+  footerSlot = null,
 }) {
   const navigate = useNavigate();
 
@@ -192,72 +193,86 @@ export default memo(function EventCard({
           <Separator className="my-4" />
 
           {/* Actions + progress */}
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-muted-foreground hover:text-foreground"
-              onClick={() =>
-                onView ? onView(event) : navigate(`/events/${slug}`)
-              }
-              aria-label="View"
-              title="View"
-            >
-              <Eye className="h-5 w-5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-muted-foreground hover:text-foreground"
-              onClick={() =>
-                onEdit
-                  ? onEdit(event)
-                  : navigate(`/dashboard/organizer/events/${_id}/edit`)
-              }
-              aria-label="Edit"
-              title="Edit"
-            >
-              <Pencil className="h-5 w-5" />
-            </Button>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="text-muted-foreground hover:text-foreground"
-                  aria-label="Delete"
-                  title="Delete"
-                >
-                  <Trash2 className="h-5 w-5" />
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Delete this event?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This action cannot be undone. All associated data (tickets,
-                    attendees, etc.) may also be removed depending on your
-                    backend rules.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={() => onDelete?.(event)}>
-                    Delete
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+          <div className="flex flex-col gap-3">
+            {/* Actions row */}
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-muted-foreground hover:text-foreground"
+                onClick={() =>
+                  onView ? onView(event) : navigate(`/events/${slug}`)
+                }
+                aria-label="View"
+                title="View"
+              >
+                <Eye className="h-5 w-5" />
+              </Button>
 
-            <div className="mx-2 h-4 w-px bg-border" />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-muted-foreground hover:text-foreground"
+                onClick={() =>
+                  onEdit
+                    ? onEdit(event)
+                    : navigate(`/dashboard/organizer/events/${_id}/edit`)
+                }
+                aria-label="Edit"
+                title="Edit"
+              >
+                <Pencil className="h-5 w-5" />
+              </Button>
 
-            <div className="flex-1">
-              {/* Use shadcn <Progress value={pct} /> if available */}
-              <Bar value={pct} />
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-muted-foreground hover:text-foreground"
+                    aria-label="Delete"
+                    title="Delete"
+                  >
+                    <Trash2 className="h-5 w-5" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete this event?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This action cannot be undone. All associated data
+                      (tickets, attendees, etc.) may also be removed depending
+                      on your backend rules.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => onDelete?.(event)}>
+                      Delete
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+
+              {/* inline slot area */}
+              {footerSlot && (
+                <>
+                  <div className="mx-2 h-4 w-px bg-border" />
+                  {footerSlot}
+                </>
+              )}
             </div>
-            <span className="text-sm text-muted-foreground tabular-nums">
-              {pct}%
-            </span>
+
+            {/* Progress row */}
+            <div className="flex items-center gap-3">
+              <div className="flex-1">
+                {/* Use shadcn <Progress value={pct} /> if available */}
+                <Bar value={pct} />
+              </div>
+              <span className="text-sm text-muted-foreground tabular-nums">
+                {pct}%
+              </span>
+            </div>
           </div>
         </CardContent>
       </Card>

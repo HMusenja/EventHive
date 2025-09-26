@@ -10,7 +10,6 @@ import { Server } from "socket.io";
 import { connectDB } from "./config/db.js";
 import { socketAuth } from "./socket/socketAuth.js";
 import { setupSocketHandlers } from "./socket/handlers.js";
-
 import { globalErrorHandler, routeNotFound } from "./middleware/errorHandler.js";
 
 // Routers
@@ -26,12 +25,10 @@ import onboardingRoutes from "./routes/onboarding.routes.js";
 import matchmakingRoutes from "./routes/matches.routes.js";
 import eventMatchRoutes from "./routes/eventMatch.routes.js";
 import meetingRoutes from "./routes/meetings.routes.js";
-//import messageRoutes from "./routes/messages.routes.js";
 import chatRoutes from "./routes/chat.routes.js";
 import feedbackRoutes from "./routes/feedback.routes.js";
 import notificationRoutes from "./routes/notification.routes.js";
 import uploadRoutes from "./routes/upload.routes.js";
-
 
 dotenv.config();
 await connectDB();
@@ -46,9 +43,12 @@ app.use(morgan("dev"));
 app.use(express.json());
 app.use(cookieParser());
 
-// ---------- Express routers ----------
-app.use("/api/events", eventRoutes);
+// ---------- Public routes (accessible by anyone) ----------
+app.use("/api/feedback", feedbackRoutes);
+
+// ---------- Authenticated routes (protected) ----------
 app.use("/api/users", userRoutes);
+app.use("/api/events", eventRoutes);
 app.use("/api/tickets", ticketRoutes);
 app.use("/api/ticketing", ticketingRoutes);
 app.use("/api/orders", orderRoutes);
@@ -59,14 +59,11 @@ app.use("/api", onboardingRoutes);
 app.use("/api", matchmakingRoutes);
 app.use("/api", eventMatchRoutes);
 app.use("/api/meetings", meetingRoutes);
-//app.use("/api", messageRoutes);
 app.use("/api", chatRoutes);
-app.use("/api/feedback", feedbackRoutes);
 app.use("/api", notificationRoutes);
 app.use("/api/upload", uploadRoutes);
 
-
-// Errors
+// ---------- 404 & global errors ----------
 app.use(routeNotFound);
 app.use(globalErrorHandler);
 
@@ -76,7 +73,7 @@ const io = new Server(httpServer, {
   cors: { origin: "http://localhost:5173", credentials: true },
 });
 
-io.use(socketAuth);                 // ✅ socket.io auth ONLY
+io.use(socketAuth);
 io.on("connection", (socket) => {
   setupSocketHandlers(io, socket);
   socket.on("error", (err) => {
@@ -84,7 +81,7 @@ io.on("connection", (socket) => {
   });
 });
 
-// ---------- Start ----------
+// ---------- Start server ----------
 httpServer.listen(PORT, () => {
   console.log(
     `🚀 Server is up and running!\n` +

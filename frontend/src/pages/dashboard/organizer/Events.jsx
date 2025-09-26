@@ -8,6 +8,7 @@ import {
   Plus,
   Search,
   Filter,
+  TicketPlus,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -21,18 +22,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import {
-  getEventAttendeeCountById,
-  // getEventAttendeeCountBySlug,
-} from "@/api/attendeeApi";
+import { getEventAttendeeCountById } from "@/api/attendeeApi";
 import EventCard from "@/components/event/EventCard";
 import { useEvents } from "@/context/EventContext";
-import EditEventModal from "@/components/event/EditEventModal";
-import CreateEventModal from "@/components/event/CreateEventModal";
-
-import { OrganizerTicketProvider } from "@/context/OrganizerTicketContext";
 import CreateTicketModal from "@/components/tickets/CreateTicketModal";
-import {toast} from "sonner"
 
 function pickStatus(ev) {
   return (
@@ -53,51 +46,37 @@ function money(n, currency = "EUR") {
 export default function OrganizerEventsPane() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [creating, setCreating] = useState(false);
-  const createdId = location.state?.createdId; // passed from CreateEventModal
+  const createdId = location.state?.createdId; // optional highlight
 
   const {
-    state: { events, loading, error, deletingId },
+    state: { events, loading, error },
     fetchMyEvents,
-     deleteEvent,
+    deleteEvent,
   } = useEvents();
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
-  const [openCreateTicket, setOpenCreateTicket] = useState(false);
-  const [createdEventId, setCreatedEventId] = useState(null);
-  const [createdEventEndAt, setCreatedEventEndAt] = useState("");
-
-  // map of refs to wrapper nodes so we can scroll/highlight the new card
-  const itemRefs = useRef({}); // { [id]: HTMLElement }
-
-  // per-event metrics from attendee/ticket API
-  // shape: { [eventId]: { attendeeCount, capacityTotal, minTicketPrice, totalRevenue, currency, checkedInCount, memberCount } }
+  const itemRefs = useRef({});
   const [countsMap, setCountsMap] = useState({});
 
-  // load only current user's events
+  const [createForEvent, setCreateForEvent] = useState(null);
+
+  // Load events
   useEffect(() => {
     fetchMyEvents();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // after events load, fetch metrics in parallel and store
+  // Fetch metrics
   useEffect(() => {
-    if (!events?.length) {
-      setCountsMap({});
-      return;
-    }
+    if (!events?.length) return setCountsMap({});
     let cancelled = false;
 
     (async () => {
-      const ids = Array.from(
-        new Set(events.map((e) => String(e?._id)).filter(Boolean))
-      );
+      const ids = events.map((e) => String(e._id)).filter(Boolean);
       const results = await Promise.allSettled(
         ids.map((id) => getEventAttendeeCountById(id))
       );
-
       if (cancelled) return;
       const next = {};
       for (const r of results) {
@@ -113,7 +92,6 @@ export default function OrganizerEventsPane() {
     };
   }, [events]);
 
-  // merge metrics into each event — EventCard reads attendeeCount & capacityTotal for progress bar
   const normalized = useMemo(
     () =>
       (events || []).map((ev) => {
@@ -121,18 +99,14 @@ export default function OrganizerEventsPane() {
         const m = countsMap[id] || {};
         return {
           ...ev,
-          // live metrics from API (fall back to 0/undefined)
           attendeeCount: m.attendeeCount ?? 0,
           capacityTotal: m.capacityTotal ?? 0,
           price: Number.isFinite(m.minTicketPrice)
             ? m.minTicketPrice
-            : undefined, // undefined → "Free" in card
+            : undefined,
           revenue: Number.isFinite(m.totalRevenue) ? m.totalRevenue : 0,
           currency: (m.currency || "EUR").toUpperCase(),
           status: pickStatus(ev),
-          // keep older fields for any other UI that still uses them
-          attendees: m.attendeeCount ?? ev.attendees ?? 0,
-          capacity: m.capacityTotal ?? ev.capacity ?? 0,
         };
       }),
     [events, countsMap]
@@ -156,11 +130,7 @@ export default function OrganizerEventsPane() {
   }, [normalized, searchTerm, statusFilter]);
 
   const totalAttendees = useMemo(
-    () =>
-      filteredEvents.reduce(
-        (sum, ev) => sum + (ev.attendeeCount || ev.attendees || 0),
-        0
-      ),
+    () => filteredEvents.reduce((sum, ev) => sum + (ev.attendeeCount || 0), 0),
     [filteredEvents]
   );
   const totalRevenue = useMemo(
@@ -169,30 +139,22 @@ export default function OrganizerEventsPane() {
     [filteredEvents]
   );
 
-  // actions
-  const [editing, setEditing] = useState(null);
-
   const handleView = (ev) => navigate(`/events/${ev.slug || ev._id}`);
-  const handleEdit = (ev) => setEditing(ev);
-  const handleCloseEdit = () => setEditing(null);
-const handleDelete = async (ev) => {
-  try {
-    await deleteEvent(ev._id);
-  } catch {}
-};
-  // 🔔 Highlight & scroll the newly-created event into view
+  const handleDelete = async (ev) => {
+    try {
+      await deleteEvent(ev._id);
+    } catch {}
+  };
+
+  // Highlight newly created event if any
   useEffect(() => {
     if (!createdId || !filteredEvents.length) return;
-
     const el = itemRefs.current[String(createdId)];
     if (el) {
       el.scrollIntoView({ behavior: "smooth", block: "center" });
       el.classList.add("flash-highlight");
       const t = setTimeout(() => el.classList.remove("flash-highlight"), 2000);
-
-      // clear state so it doesn't trigger again on back/forward
       window.history.replaceState({}, document.title, window.location.pathname);
-
       return () => clearTimeout(t);
     }
   }, [createdId, filteredEvents]);
@@ -215,7 +177,7 @@ const handleDelete = async (ev) => {
           </Button>
           <Button
             className="bg-gradient-to-r from-primary to-secondary"
-            onClick={() => setCreating(true)}
+            onClick={() => navigate("/account/event/create")}
           >
             <Plus className="h-4 w-4 mr-2" />
             Create New Event
@@ -313,13 +275,6 @@ const handleDelete = async (ev) => {
         <div className="py-16 text-center text-muted-foreground">
           Loading events…
         </div>
-      ) : error ? (
-        <div className="py-16 text-center">
-          <p className="text-destructive mb-3">
-            Failed to load events: {error}
-          </p>
-          <Button onClick={fetchMyEvents}>Try again</Button>
-        </div>
       ) : filteredEvents.length ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredEvents.map((ev) => {
@@ -334,8 +289,18 @@ const handleDelete = async (ev) => {
                   variant="organizer"
                   event={ev}
                   onView={handleView}
-                  onEdit={handleEdit}
                   onDelete={handleDelete}
+                  footerSlot={
+                    <Button
+                      size="sm"
+                      className="h-8 px-2"
+                      onClick={() => setCreateForEvent(ev)}
+                      title="Create ticket for this event"
+                    >
+                      <TicketPlus className="h-4 w-4 mr-1" />
+                      Ticket
+                    </Button>
+                  }
                 />
               </div>
             );
@@ -352,46 +317,24 @@ const handleDelete = async (ev) => {
           </p>
           <Button
             className="bg-gradient-to-r from-primary to-secondary"
-            onClick={() => navigate("/dashboard/organizer/events/new")}
+            onClick={() => navigate("/account/event/create")}
           >
             <Plus className="h-4 w-4 mr-2" />
             Create New Event
           </Button>
         </div>
       )}
-
-     {/* Modals */}
-      <EditEventModal
-        open={!!editing}
-        event={editing}
-        onOpenChange={(isOpen) => {
-          if (!isOpen) handleCloseEdit();
+      {/* Multi-create Tickets Modal */}
+      <CreateTicketModal
+        open={!!createForEvent}
+        onOpenChange={(v) => !v && setCreateForEvent(null)}
+        eventId={createForEvent?._id}
+        eventEndAt={createForEvent?.endAt}
+        onDone={() => {
+          setCreateForEvent(null);
+          fetchMyEvents(); // refresh metrics after creation
         }}
       />
-
-      {/* Event creation modal. Parent controls the post-create flow */}
-     <CreateEventModal
-  open={creating}
-  onOpenChange={setCreating}
-  onEventCreated={(evt) => {
-    setCreating(false);
-    setCreatedEventId(evt?._id || null);
-    setCreatedEventEndAt(evt?.endAt || "");
-    // Open **after** state is committed (next tick is enough)
-    setTimeout(() => setOpenCreateTicket(true), 0);
-  }}
-/>
-
-      {/* ⬇️ Ticket modal + provider live OUTSIDE the event modal */}
-      <OrganizerTicketProvider>
-  <CreateTicketModal
-    key={createdEventId || "new"}              // ✅ force fresh state per event
-    open={openCreateTicket}
-    onOpenChange={setOpenCreateTicket}
-    eventId={createdEventId}
-    eventEndAt={createdEventEndAt}
-  />
-</OrganizerTicketProvider>
     </div>
   );
 }

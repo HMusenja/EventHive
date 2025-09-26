@@ -39,15 +39,15 @@ export const getMyEventMember = async (req, res, next) => {
     if (!event) return next(createError(404, "Event not found"));
 
     const member = await EventMember.findOne({ eventId, userId });
-    if (!member) return next(createError(404, "No membership for this event"));
+    // if (!member) return next(createError(404, "No membership for this event"));
 
     // fallback to User.interests if member.interests empty
-    let effectiveInterests = Array.isArray(member.interests) && member.interests.length
+    let effectiveInterests = Array.isArray(member?.interests) && member.interests.length
       ? member.interests
       : [];
 
     let userDoc = null;
-    if (!effectiveInterests.length || !member.avatarOverride) {
+    if (!effectiveInterests.length || !member?.avatarOverride) {
       userDoc = await User.findById(userId).select("interests avatar fullName username");
       if (!effectiveInterests.length && userDoc?.interests?.length) {
         effectiveInterests = userDoc.interests;
@@ -56,15 +56,16 @@ export const getMyEventMember = async (req, res, next) => {
 
     res.json({
       eventMember: member,
-      roles: member.roles ?? [],
-      status: member.status ?? "pending",
+      roles: member?.roles ?? [],
+      status: member?.status ?? "pending",
       defaults: { interests: effectiveInterests },
       profile: {
-        bio: member.bio ?? "",
-        avatar: member.avatarOverride || userDoc?.avatar || req.user?.avatar || "",
+        bio: member?.bio ?? "",
+        avatar: member?.avatarOverride || userDoc?.avatar || req.user?.avatar || "",
         name: userDoc?.fullName || req.user?.fullName || "",
         username: userDoc?.username || req.user?.username || "",
       },
+       onboardingComplete: member?.onboardingComplete === true,
     });
   } catch (err) {
     next(err);
@@ -88,21 +89,22 @@ export const updateMyEventAttendeeProfile = async (req, res, next) => {
       return next(createError(403, "Not allowed to update profile for this event"));
     }
 
-    const { bio, interests, avatarOverride } = req.body || {};
+    const { bio, onboardingComplete, avatarOverride } = req.body || {};
 
-    if (Array.isArray(interests)) {
-      member.interests = Array.from(
-        new Set(
-          interests
-            .map((t) => String(t || "").toLowerCase().trim().replace(/\s+/g, " "))
-            .filter(Boolean)
-        )
-      ).slice(0, 50);
-    }
     if (typeof bio === "string") member.bio = bio.trim().slice(0, 1000);
     if (typeof avatarOverride === "string") member.avatarOverride = avatarOverride.trim();
+    if (typeof onboardingComplete === "boolean") member.onboardingComplete = onboardingComplete;
 
     await member.save();
+
+    // ✅ if this request marks onboarding complete, set it globally on the user too
+    if (onboardingComplete === true) {
+      await User.updateOne(
+        { _id: userId, hasOnboarded: { $ne: true } },
+        { $set: { hasOnboarded: true, onboardedAt: new Date() } }
+      );
+    }
+
     res.json({ eventMember: member });
   } catch (err) {
     next(err);
