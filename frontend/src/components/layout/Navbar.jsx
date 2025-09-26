@@ -11,6 +11,7 @@ import {
   Sun,
   Moon,
   MessageSquareText,
+  Bell, // ⬅️ added
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { Link, useNavigate } from "react-router-dom";
@@ -38,6 +39,7 @@ import ThemeToggle from "./ThemeToggle";
 import AuthModal from "../AuthModal";
 import GlobalChatButton from "@/components/nav/GlobalChatButton";
 import { useToast } from "@/hooks/use-toast";
+import { useNotifications } from "@/context/NotificationContext"; // ⬅️ added
 
 function relativeTime(ts) {
   if (!ts) return "Just now";
@@ -60,11 +62,21 @@ function relativeTime(ts) {
   return `${years}y ago`;
 }
 
+// ⬇️ tiny presentation helper for the list
+function iconFor(n) {
+  if (n.type === "message") return "💬";
+  if (n.type === "checkin") return "✅";
+  return "🔔"; // system/default
+}
+
 export default function Navbar() {
   const { user, logout, refreshMe, loading, initialized } = useAuth();
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
   const { toast } = useToast();
+
+  // ⬇️ notifications from context
+  const { notifications, unreadCount, markRead, removeOne } = useNotifications();
 
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState("login");
@@ -158,6 +170,65 @@ export default function Navbar() {
             {/* ⬇️ Global Chat */}
             <GlobalChatButton />
 
+            {/* ⬇️ Notifications bell */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="relative inline-flex items-center justify-center h-9 w-9 rounded-xl border border-border hover:bg-muted transition"
+                  aria-label="Notifications"
+                >
+                  <Bell className="h-4 w-4" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 text-[10px] leading-none rounded-full bg-destructive text-destructive-foreground px-1.5 py-1">
+                      {unreadCount > 9 ? "9+" : unreadCount}
+                    </span>
+                  )}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-80 p-0 overflow-hidden">
+                <div className="flex items-center justify-between px-3 py-2">
+                  <div className="font-semibold">Notifications</div>
+                  <div className="text-xs text-muted-foreground">{unreadCount} unread</div>
+                </div>
+                <div className="max-h-80 overflow-auto divide-y">
+                  {notifications.length === 0 ? (
+                    <div className="p-4 text-sm text-muted-foreground">No notifications yet</div>
+                  ) : (
+                    notifications.map((n) => (
+                      <div key={n._id} className="flex items-start gap-3 p-3">
+                        <div className="text-lg">{iconFor(n)}</div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-medium">{n.title}</div>
+                          <div className="text-xs text-muted-foreground break-words">{n.message}</div>
+                          {n.meta?.meetingId && (
+                            <a href="/meetings" className="text-xs text-primary underline">
+                              Open meeting
+                            </a>
+                          )}
+                          {n.readAt == null && (
+                            <button
+                              className="mt-1 text-xs text-primary"
+                              onClick={() => markRead(n._id)}
+                            >
+                              Mark as read
+                            </button>
+                          )}
+                        </div>
+                        <button
+                          className="text-xs text-muted-foreground"
+                          onClick={() => removeOne(n._id)}
+                          aria-label="Remove notification"
+                          title="Remove"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             <div className="hidden md:flex items-center">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -193,16 +264,20 @@ export default function Navbar() {
                     </>
                   ) : (
                     <>
-                      <DropdownMenuItem onClick={() => {
-                        setAuthMode("login");
-                        setAuthOpen(true);
-                      }}>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setAuthMode("login");
+                          setAuthOpen(true);
+                        }}
+                      >
                         <User className="mr-2 h-4 w-4" /> Sign in
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => {
-                        setAuthMode("register");
-                        setAuthOpen(true);
-                      }}>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setAuthMode("register");
+                          setAuthOpen(true);
+                        }}
+                      >
                         <User className="mr-2 h-4 w-4" /> Register
                       </DropdownMenuItem>
                     </>
@@ -285,18 +360,24 @@ export default function Navbar() {
                   ) : (
                     <div className="grid gap-3">
                       <SheetClose asChild>
-                        <Button variant="outline" onClick={() => {
-                          setAuthMode("login");
-                          setAuthOpen(true);
-                        }}>
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setAuthMode("login");
+                            setAuthOpen(true);
+                          }}
+                        >
                           <User className="mr-2 h-4 w-4" /> Sign in
                         </Button>
                       </SheetClose>
                       <SheetClose asChild>
-                        <Button className="border-0 bg-gradient-electric text-electric-foreground hover:shadow-electric" onClick={() => {
-                          setAuthMode("register");
-                          setAuthOpen(true);
-                        }}>
+                        <Button
+                          className="border-0 bg-gradient-electric text-electric-foreground hover:shadow-electric"
+                          onClick={() => {
+                            setAuthMode("register");
+                            setAuthOpen(true);
+                          }}
+                        >
                           Register
                         </Button>
                       </SheetClose>

@@ -25,15 +25,15 @@ import {
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
-import { fetchTickets, checkoutGuest } from "@/services/ticketsApi"
+import { fetchTickets, checkoutGuest } from "@/api/ticketsApi"
 
 // Small inline form purpose-built for the guest flow in this modal
 function GuestCheckoutForm({ eventId, ticket, onBack }) {
   const navigate = useNavigate();
-  const [fullName, setFullName]   = useState("");
-  const [email, setEmail]         = useState("");
-  const [qty, setQty]             = useState(1);
-  const [consent, setConsent]     = useState(false);
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [qty, setQty] = useState(1);
+  const [consent, setConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errBanner, setErrBanner] = useState(null);
 
@@ -177,8 +177,8 @@ function GuestCheckoutForm({ eventId, ticket, onBack }) {
           {submitting
             ? "Processing..."
             : isFree
-            ? "Get Free Ticket"
-            : "Continue to Payment"}
+              ? "Get Free Ticket"
+              : "Continue to Payment"}
         </Button>
         <Button type="button" variant="ghost" onClick={onBack} disabled={submitting}>
           Back
@@ -268,9 +268,8 @@ export default function SmartGetTicketButton({
                     {t.name}{" "}
                     {(t.priceCents || 0) === 0
                       ? "— Free"
-                      : `— ${(t.priceCents / 100).toFixed(2)} ${
-                          t.currency ? t.currency.toUpperCase() : ""
-                        }`}
+                      : `— ${(t.priceCents / 100).toFixed(2)} ${t.currency ? t.currency.toUpperCase() : ""
+                      }`}
                   </SelectItem>
                 ))}
               </SelectContent>

@@ -1,5 +1,3 @@
-
-
 import { createContext, useReducer, useContext, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { authReducer } from "../reducers/authReducer";
@@ -36,11 +34,11 @@ async function attachOrganizerFlag(user) {
   } catch (err) {
     console.warn("[AuthContext] organizer check failed:", err?.message || err);
 
-  //  return { ...user, isOrganizer: events.length > 0 };
-  //} catch (err) {
+    //  return { ...user, isOrganizer: events.length > 0 };
+    //} catch (err) {
     //console.warn("[AuthContext] Failed to attach organizer flag:", err.message);
 
-   // return { ...user, isOrganizer: false };
+    // return { ...user, isOrganizer: false };
   }
 }
 
@@ -64,12 +62,12 @@ export const AuthProvider = ({ children }) => {
       }
 
 
-  // Fetch current user on app load
-  //////const fetchUser = async () => {
-   ////// try {
-     //// dispatch({ type: "AUTH_LOADING" });
+      // Fetch current user on app load
+      //////const fetchUser = async () => {
+      ////// try {
+      //// dispatch({ type: "AUTH_LOADING" });
       //const res = await getCurrentUser();
-     //const rawUser = res.data?.user;
+      //const rawUser = res.data?.user;
 
       const userWithFlag = await attachOrganizerFlag(rawUser);
 
@@ -128,11 +126,11 @@ export const AuthProvider = ({ children }) => {
         error?.response?.data?.message || error?.message
       );
 
-     // const userWithFlag = await attachOrganizerFlag(rawUser);
+      // const userWithFlag = await attachOrganizerFlag(rawUser);
       //dispatch({ type: "AUTH_SUCCESS", payload: userWithFlag });
 
-    //  return { ok: true, user: userWithFlag };
-   // } catch (error) {
+      //  return { ok: true, user: userWithFlag };
+      // } catch (error) {
 
       dispatch({
         type: "AUTH_ERROR",
@@ -171,7 +169,7 @@ export const AuthProvider = ({ children }) => {
         "[AuthContext] Registration failed:",
         error?.response?.data?.message || error?.message
       );
-dispatch({
+      dispatch({
         type: "AUTH_ERROR",
         payload: error?.response?.data?.message || "Registration failed",
       });
@@ -212,7 +210,7 @@ dispatch({
         refreshMe: fetchUser,
         login,
         register,
-        registerLite,
+        //registerLite,
         logout,
 
       }}
@@ -234,12 +232,12 @@ export const useAuth = () => {
       refreshMe: async () => ({ ok: false }),
       login: async () => ({ ok: false }),
       register: async () => ({ ok: false }),
-      registerLite: async () => ({}),
+      //registerLite: async () => ({}),
       logout: async () => { },
     };
 
-   // console.warn("[useAuth] Tried to use AuthContext outside its provider.");
-  //  return { user: null, isAuthenticated: false, loading: true, logout: () => {} };
+    // console.warn("[useAuth] Tried to use AuthContext outside its provider.");
+    //  return { user: null, isAuthenticated: false, loading: true, logout: () => {} };
 
   }
   return context;

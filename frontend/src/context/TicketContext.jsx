@@ -1,6 +1,5 @@
-// src/context/TicketContext.jsx
 import { createContext, useContext, useReducer, useEffect, useCallback, useMemo } from "react";
-import { fetchMyTickets } from "@/services/ticketsApi";
+import { fetchMyTickets } from "@/api/ticketsApi";
 import { useAuth } from "./AuthContext";
 
 export const TicketContext = createContext();

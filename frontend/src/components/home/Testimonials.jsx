@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Star } from "lucide-react";
-import api from "@/lib/axios";
+import api from "@/services/axiosConfig";
 
 //const items = [
 //  { name: "Sarah Chen", role: "Organizer", content: "EventHub transformed how I manage conferences.", bg: "bg-gradient-vibrant" },
@@ -15,7 +15,7 @@ export default function Testimonials() {
   useEffect(() => {
     (async () => {
       try {
-        const { data } = await api.get("feedback");
+        const { data } = await api.get("/feedback");
         setItems(data);
       } catch (e) {
         console.error("Failed to load feedback", e);

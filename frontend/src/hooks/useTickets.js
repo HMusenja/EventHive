@@ -1,6 +1,6 @@
 // src/hooks/useTickets.js
 import { useEffect, useState } from "react";
-import { fetchTickets, fetchMyTickets } from "@/services/ticketsApi"; 
+import { fetchTickets, fetchMyTickets } from "@/api/ticketsApi";
 import { getEvent } from "@/api/eventsApi";
 import { useAuth } from "@/context/AuthContext";
 

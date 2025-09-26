@@ -1,101 +1,100 @@
-// src/api/organizerApi.js
-import axios from "axios";
+import axios from "@/services/axiosConfig";
 
-// Helper to surface friendly errors
-function errMsg(e, fallback = "Request failed") {
-  return e?.response?.data?.message || e?.message || fallback;
-}
+// helpers
+const enc = (v) => encodeURIComponent(String(v ?? "").trim());
+const errMsg = (e, fb) => e?.response?.data?.message || e?.message || fb;
 
-// Fetch events the current user organizes
+// ————————————————————————————————
+// Reads
+// ————————————————————————————————
+
 export async function getMyOrganizing() {
   try {
-    const { data } = await axios.get("/api/events/me/organizing", {
-      withCredentials: true, // ← ensure cookie/JWT is sent
-    });
+    const { data } = await axios.get("/events/me/organizing");
     return data;
   } catch (e) {
-    const msg = errMsg(e, "Failed to fetch my organizing events");
-    console.error("[getMyOrganizing] error →", msg);
-    throw new Error(msg);
+    throw new Error(errMsg(e, "Failed to fetch my organizing events"));
   }
 }
 
 export async function getEvent(idOrSlug) {
   try {
-    const { data } = await axios.get(`/api/events/${idOrSlug}`);
+    const { data } = await axios.get(`/events/${enc(idOrSlug)}`);
     return data;
   } catch (e) {
-    const msg = errMsg(e, "Failed to fetch event");
-    console.error("[getEvent] error →", msg);
-    throw new Error(msg);
+    throw new Error(errMsg(e, "Failed to fetch event"));
   }
 }
 
-export async function getAllEvents() {
+export async function getAllEvents(params = {}) {
   try {
-    const { data } = await axios.get("/api/events");
+    const clean = Object.fromEntries(
+      Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== "")
+    );
+    const { data } = await axios.get("/events", { params: clean });
     return data;
   } catch (e) {
-    const msg = errMsg(e, "Failed to fetch events");
-    console.error("[getAllEvents] error →", msg);
-    throw new Error(msg);
+    throw new Error(errMsg(e, "Failed to fetch events"));
   }
 }
+
+// ————————————————————————————————
+// Updates
+// ————————————————————————————————
 
 export async function updateOrganizerProfile(eventId, profile) {
   try {
-    const { data } = await axios.put(
-      `/api/events/${eventId}/organizer-profile`,
-      profile,
-      { withCredentials: true }
-    );
+    const { data } = await axios.put(`/events/${enc(eventId)}/organizer-profile`, profile);
     return data;
   } catch (e) {
-    const msg = errMsg(e, "Failed to update organizer profile");
-    throw new Error(msg);
+    throw new Error(errMsg(e, "Failed to update organizer profile"));
   }
 }
 
-// Update event
 export async function updateEvent(id, payload) {
-  const { data } = await axios.patch(`/api/events/${id}`, payload, {
-    withCredentials: true,
-  });
-  return data; // updated event doc
+  try {
+    const { data } = await axios.patch(`/events/${enc(id)}`, payload);
+    return data;
+  } catch (e) {
+    throw new Error(errMsg(e, "Failed to update event"));
+  }
 }
 
-// ★ NEW: Create event
+// ————————————————————————————————
+// Creates / Deletes / Utils
+// ————————————————————————————————
+
 export async function createEvent(payload) {
   try {
-    const { data } = await axios.post("/api/events", payload, {
-      withCredentials: true,
-    });
-    return data; // newly created event
+    const { data } = await axios.post("/events", payload);
+    return data;
   } catch (e) {
     if (e?.response?.status === 409) {
-      throw new Error("Slug already in use. Try a different one (e.g., add -2025 or -hamburg).");
+      throw new Error("Slug already in use. Try a different one (e.g. add -2025 or -hamburg).");
     }
     throw new Error(errMsg(e, "Failed to create event"));
   }
 }
 
-// slug Availability 
 export async function isSlugAvailable(slug) {
-  if (!slug) return false; // empty slug isn’t valid/available
+  if (!slug) return false;
   try {
-    await axios.get(`/api/events/${slug}`, { withCredentials: true });
-    return false; // 200 → exists → taken
-  } catch (e) {
-    if (e?.response?.status === 404) return true; // 404 → not found → available
-    // network or 5xx → treat as unknown, not available to be safe
+    const res = await axios.get(`/events/${enc(slug)}`, {
+      validateStatus: () => true, // don't throw; we inspect status below
+    });
+    if (res.status === 404) return true;
+    if (res.status === 200) return false;
+    return false;
+  } catch {
     return false;
   }
 }
 
- //Delete Event by id
 export async function deleteEventById(eventId) {
-  const { data } = await axios.delete(`/api/events/${eventId}`, {
-    withCredentials: true, 
-  });
-  return data;
+  try {
+    const { data } = await axios.delete(`/events/${enc(eventId)}`);
+    return data;
+  } catch (e) {
+    throw new Error(errMsg(e, "Failed to delete event"));
+  }
 }

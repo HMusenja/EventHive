@@ -6,11 +6,9 @@ import helmet from "helmet";
 import morgan from "morgan";
 import { createServer } from "http";
 import { Server } from "socket.io";
-
 import { connectDB } from "./config/db.js";
 import { socketAuth } from "./socket/socketAuth.js";
 import { setupSocketHandlers } from "./socket/handlers.js";
-
 import { globalErrorHandler, routeNotFound } from "./middleware/errorHandler.js";
 
 // Routers
@@ -37,7 +35,7 @@ dotenv.config();
 await connectDB();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5050;
 
 // ---------- Express middleware ----------
 app.use(cors({ origin: "http://localhost:5173", credentials: true }));
@@ -64,7 +62,6 @@ app.use("/api", chatRoutes);
 app.use("/api/feedback", feedbackRoutes);
 app.use("/api", notificationRoutes);
 app.use("/api/upload", uploadRoutes);
-
 
 // Errors
 app.use(routeNotFound);

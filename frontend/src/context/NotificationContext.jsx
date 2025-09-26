@@ -1,4 +1,3 @@
-// src/context/NotificationContext.jsx
 import React, { createContext, useReducer, useContext, useEffect } from "react";
 import {
   getNotifications,
@@ -23,10 +22,10 @@ function reducer(state, action) {
 
       return { ...state, notifications: action.payload, loading: false };
     case "SET_UNREAD_COUNT":
-    
+
       return { ...state, unreadCount: action.payload };
     case "MARK_READ":
-    
+
       return {
         ...state,
         notifications: state.notifications.map((n) =>
@@ -35,7 +34,7 @@ function reducer(state, action) {
         unreadCount: Math.max(state.unreadCount - 1, 0),
       };
     case "MARK_ALL_READ":
-     
+
       return {
         ...state,
         notifications: state.notifications.map((n) => ({
@@ -45,13 +44,13 @@ function reducer(state, action) {
         unreadCount: 0,
       };
     case "DELETE_NOTIFICATION":
-   
+
       return {
         ...state,
         notifications: state.notifications.filter((n) => n._id !== action.payload),
       };
     case "CLEAR_READ":
-    
+
       return {
         ...state,
         notifications: state.notifications.filter((n) => !n.readAt),
@@ -76,32 +75,32 @@ export function NotificationProvider({ children }) {
   }
 
   async function fetchNotifications() {
-  dispatch({ type: "SET_LOADING", payload: true });
-  try {
-    const [listRes, countRes] = await Promise.all([getNotifications(), getUnreadCount()]);
+    dispatch({ type: "SET_LOADING", payload: true });
+    try {
+      const [listRes, countRes] = await Promise.all([getNotifications(), getUnreadCount()]);
 
-     const list = normalizeListResp(listRes);
+      const list = normalizeListResp(listRes);
 
-    // sort by createdAt if available
-    list.sort((a, b) => {
-      const aa = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const bb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return bb - aa;
-    });
+      // sort by createdAt if available
+      list.sort((a, b) => {
+        const aa = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const bb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return bb - aa;
+      });
 
-    dispatch({ type: "SET_NOTIFICATIONS", payload: list });
-    dispatch({
-      type: "SET_UNREAD_COUNT",
-      payload: countRes?.data?.count ?? countRes?.data ?? 0,
-    });
-  } catch (err) {
-    console.error("[NotificationContext] fetchNotifications failed:", err);
-    dispatch({ type: "SET_NOTIFICATIONS", payload: [] });
-    dispatch({ type: "SET_UNREAD_COUNT", payload: 0 });
-  } finally {
-    dispatch({ type: "SET_LOADING", payload: false });
+      dispatch({ type: "SET_NOTIFICATIONS", payload: list });
+      dispatch({
+        type: "SET_UNREAD_COUNT",
+        payload: countRes?.data?.count ?? countRes?.data ?? 0,
+      });
+    } catch (err) {
+      console.error("[NotificationContext] fetchNotifications failed:", err);
+      dispatch({ type: "SET_NOTIFICATIONS", payload: [] });
+      dispatch({ type: "SET_UNREAD_COUNT", payload: 0 });
+    } finally {
+      dispatch({ type: "SET_LOADING", payload: false });
+    }
   }
-}
 
   async function markAsRead(id) {
     try {
@@ -147,6 +146,8 @@ export function NotificationProvider({ children }) {
 
   useEffect(() => {
     fetchNotifications();
+    const t = setInterval(fetchNotifications, 30_000); // every 30s
+    return () => clearInterval(t);
   }, []);
 
   return (

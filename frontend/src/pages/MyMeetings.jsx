@@ -1,13 +1,15 @@
-// frontend/src/pages/MyMeetings.jsx
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { listMeetings, updateMeetingStatus } from "@/services/meetingsApi";
+import { useParams } from "react-router-dom";
+import { listMeetings, updateMeetingStatus, sendMeetingNote } from "@/api/meetingsApi";
+import MeetingNoteDialog from "@/components/meetings/MeetingNoteDialog";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Calendar, Clock, Video, MapPin, Check, X, Ban, Filter, Pencil } from "lucide-react";
+import { Loader2, Calendar, Clock, Video, MapPin, Check, X, Ban, Filter, MessageSquare } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import ScheduleMeetingModal from "@/components/meetings/ScheduleMeetingModal";
 
 function fmtRange(startAt, endAt) {
     const s = new Date(startAt);
@@ -22,20 +24,27 @@ function fmtRange(startAt, endAt) {
 export default function MyMeetings() {
     const { eventId } = useParams();
     const { toast } = useToast();
+    const { user } = useAuth();
 
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [actingId, setActingId] = useState(null);
-    const [viewMode, setViewMode] = useState("upcoming"); // upcoming | past | today | all
+    const [noteForId, setNoteForId] = useState(null);
+    const [noteSending, setNoteSending] = useState(false);
+    const [viewMode, setViewMode] = useState("upcoming");
+
+    // ⬇️ NEW: control the schedule modal here
+    const [modalOpen, setModalOpen] = useState(false);
+    const [presetInviteeId] = useState(null); // keep null on MyMeetings; user picks in modal
 
     async function load(signal) {
         setLoading(true);
         try {
-            const params = { role: "mine" };
-            if (eventId) params.eventId = eventId; // guard event filter
-            const { meetings } = await listMeetings({ ...params, signal });
+            const params = { role: "mine", ...(eventId ? { eventId } : {}) };
+            const { meetings } = await listMeetings(params, { signal });
             setItems(meetings || []);
         } catch (err) {
+            if (err?.code === "ERR_CANCELED") return; // unmount abort
             console.error(err);
             toast({ title: "Could not load meetings", description: "Showing what we can.", variant: "destructive" });
         } finally {
@@ -50,50 +59,159 @@ export default function MyMeetings() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [eventId]);
 
-    async function act(id, status) {
-        setActingId(id);
-        const prev = items;
-        setItems(prev.map(m => (m._id === id ? { ...m, status } : m)));
+    function showError(err) {
+        const code = err?.response?.status;
+        const data = err?.response?.data;
+        const fallback = data?.message || err?.message || "Action failed";
+
+        if (code === 409) {
+            if (data?.conflict) {
+                const who = data.offender === "requester" ? "the requester" : "you";
+                const s = new Date(data.conflict.startAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+                const e = new Date(data.conflict.endAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+                toast({
+                    title: "Time slot not available",
+                    description: `${who} already has a meeting from ${s} to ${e}. Please pick a different time.`,
+                    variant: "destructive",
+                });
+            } else {
+                toast({
+                    title: "Time slot not available",
+                    description: "This overlaps another meeting. Please choose a different time.",
+                    variant: "destructive",
+                });
+            }
+            return;
+        }
+
+        if (code === 401) {
+            toast({
+                title: "You’re signed out",
+                description: "Please log in again to continue.",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        toast({ title: "Error", description: fallback, variant: "destructive" });
+    }
+
+    function mutateLocal(updated) {
+        if (!updated || !updated._id) return;
+        setItems((prev) => prev.map((x) => (x._id === updated._id ? updated : x)));
+        toast({ title: "Updated", description: `Status: ${updated.status}` });
+    }
+
+    async function refresh() {
         try {
-            await updateMeetingStatus(id, status);
-            toast({ title: "Updated", description: `Meeting ${status}.` });
+            const params = { role: "mine" };
+            if (eventId) params.eventId = eventId;
+            const { meetings } = await listMeetings(params);
+            setItems(meetings || []);
         } catch (err) {
-            setItems(prev);
-            toast({ title: "Update failed", description: "Please try again.", variant: "destructive" });
+            console.error(err);
+        }
+    }
+
+    async function acceptMeeting(m) {
+        setActingId(m._id);
+        try {
+            const res = await updateMeetingStatus(m._id, "accepted");
+            const meeting = res?.meeting;
+            if (meeting) mutateLocal(meeting);
+        } catch (e) {
+            showError(e);
+            if (e?.response?.status === 409) await refresh();
         } finally {
             setActingId(null);
         }
     }
 
-    const scheduleTo = eventId ? `/events/${eventId}/people` : `/people`;
+    async function declineMeeting(m) {
+        const note = window.prompt("Add a short note (optional):") || "";
+        setActingId(m._id);
+        try {
+            const res = await updateMeetingStatus(m._id, "declined", note);
+            const meeting = res?.meeting;
+            if (meeting) mutateLocal(meeting);
+        } catch (e) {
+            showError(e);
+        } finally {
+            setActingId(null);
+        }
+    }
 
-    // stats
+    async function removeMeeting(m) {
+        setActingId(m._id);
+        try {
+            await updateMeetingStatus(m._id, "cancelled");
+            setItems((prev) => prev.filter((x) => x._id !== m._id));
+            toast({ title: "Removed", description: "The meeting was removed from your list." });
+        } catch (e) {
+            showError(e);
+        } finally {
+            setActingId(null);
+        }
+    }
+
+    async function handleSendNote(text) {
+        if (!noteForId) return;
+        setNoteSending(true);
+        try {
+            const { meeting } = await sendMeetingNote(noteForId, text);
+            if (meeting) {
+                mutateLocal(meeting);
+                toast({ title: "Message sent", description: "Your note was attached to the meeting." });
+            }
+        } catch (e) {
+            showError(e);
+        } finally {
+            setNoteSending(false);
+            setNoteForId(null);
+        }
+    }
+
+    // const scheduleTo = eventId ? `/events/${eventId}/people` : `/people`; // ❌ not needed anymore
+
     const counts = useMemo(() => {
         const now = new Date();
-        const total = items.length;
-        const upcoming = items.filter(m => new Date(m.startAt) >= now).length;
-        const virtual = items.filter(m => (m.location || "").match(/zoom|meet|teams/i)).length;
-        const inPerson = Math.max(0, total - virtual);
+        const active = items.filter((m) => m.status === "pending" || m.status === "accepted");
+        const total = items.length; // total of all meetings (or use active.length if you only want active)
+        const upcoming = active.filter((m) => new Date(m.endAt) >= now).length;
+        const isVirtual = (m) => {
+            const loc = (m.location || "").toLowerCase();
+            const place = m.place || "";
+            return loc === "online" || /(zoom|meet|teams|skype|webex|http:\/\/|https:\/\/)/i.test(place);
+        };
+        const virtual = active.filter(isVirtual).length;
+        const inPerson = active.filter((m) => (m.location || "").toLowerCase() === "in-person").length;
         return { total, upcoming, virtual, inPerson };
     }, [items]);
 
-    // filter
     const filtered = useMemo(() => {
         const now = new Date();
-        if (viewMode === "all") return items;
-        if (viewMode === "today") return items.filter(m => new Date(m.startAt).toDateString() === now.toDateString());
-        if (viewMode === "past") return items.filter(m => new Date(m.startAt) < now);
-        return items.filter(m => new Date(m.startAt) >= now); // upcoming
+        const base = items.filter((m) => m.status !== "cancelled");
+        if (viewMode === "all") return base;
+        if (viewMode === "today") {
+            const today = now.toDateString();
+            return base.filter((m) => new Date(m.startAt).toDateString() === today);
+        }
+        if (viewMode === "past") return base.filter((m) => new Date(m.endAt) < now);
+        return base.filter((m) => new Date(m.endAt) >= now);
     }, [items, viewMode]);
 
+    const myId = String(user?._id || "");
+
     return (
-        <div className="min-h-screen flex flex-col"> {/* ✅ full viewport height */}
-            <div className="space-y-6 flex-1">          {/* let content stretch */}
-                {/* Header + single CTA */}
+        <div className="min-h-screen flex flex-col">
+            <div className="space-y-6 flex-1">
+                {/* Header + CTA */}
                 <div className="flex items-baseline justify-between">
                     <h1 className="text-2xl font-semibold">My Meetings</h1>
-                    <Button asChild className="rounded-xl px-3">
-                        <Link to={scheduleTo}>Schedule New Meeting</Link>
+
+                    {/* ⬇️ changed: open modal instead of navigating */}
+                    <Button className="rounded-xl px-3" onClick={() => setModalOpen(true)}>
+                        Schedule New Meeting
                     </Button>
                 </div>
                 {eventId && <div className="text-sm text-muted-foreground -mt-3">Event filter: {eventId}</div>}
@@ -121,7 +239,9 @@ export default function MyMeetings() {
                     </div>
                 </div>
 
-                {/* List (fills space; empty state still centered) */}
+                {/* List */}
+                {/* ... (no changes below in list rendering/actions) ... */}
+
                 {loading ? (
                     <div className="mt-10 flex items-center justify-center text-muted-foreground">
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading meetings…
@@ -135,8 +255,8 @@ export default function MyMeetings() {
                         <p className="text-muted-foreground mb-4">
                             {viewMode === "upcoming" ? "You don't have any upcoming meetings." : "No meetings match your current filter."}
                         </p>
-                        <Button asChild className="bg-gradient-to-r from-primary to-secondary">
-                            <Link to={scheduleTo}>Schedule Your First Meeting</Link>
+                        <Button className="bg-gradient-to-r from-primary to-secondary" onClick={() => setModalOpen(true)}>
+                            Schedule Your First Meeting
                         </Button>
                     </div>
                 ) : (
@@ -144,47 +264,83 @@ export default function MyMeetings() {
                         {filtered
                             .slice()
                             .sort((a, b) => new Date(a.startAt) - new Date(b.startAt))
-                            .map(m => (
-                                <Card key={m._id}>
-                                    <CardContent className="p-4 flex items-center justify-between gap-4">
-                                        <div className="min-w-0">
-                                            <div className="font-medium">{fmtRange(m.startAt, m.endAt)}</div>
-                                            <div className="text-xs text-muted-foreground">
-                                                Status: <Badge variant="secondary" className="ml-1">{m.status}</Badge>
-                                                {m.location ? <> • Location: {m.location}</> : null}
-                                                {m.place ? <> • {m.place}</> : null}
-                                            </div>
-                                            {m.message && <div className="mt-1 text-sm">{m.message}</div>}
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            {/* Edit = navigate to people to (re)schedule with host; simple MVP */}
-                                            <Button asChild variant="outline" size="sm">
-                                                <Link to={scheduleTo}><Pencil className="mr-1 h-4 w-4" /> Edit</Link>
-                                            </Button>
+                            .map((m) => {
+                                const isInvitee = String(m.inviteeId) === myId;
+                                const isRequester = String(m.requesterId) === myId;
+                                const isPending = m.status === "pending";
 
-                                            {m.status === "pending" && (
-                                                <>
-                                                    <Button size="sm" onClick={() => act(m._id, "accepted")} disabled={actingId === m._id}>
-                                                        {actingId === m._id ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Check className="mr-1 h-4 w-4" />}
-                                                        Accept
-                                                    </Button>
-                                                    <Button size="sm" variant="outline" onClick={() => act(m._id, "declined")} disabled={actingId === m._id}>
-                                                        <X className="mr-1 h-4 w-4" /> Decline
-                                                    </Button>
-                                                </>
-                                            )}
-                                            {m.status !== "cancelled" && (
-                                                <Button size="sm" variant="destructive" onClick={() => act(m._id, "cancelled")} disabled={actingId === m._id}>
-                                                    <Ban className="mr-1 h-4 w-4" /> Cancel
+                                return (
+                                    <Card key={m._id}>
+                                        <CardContent className="p-4 flex items-center justify-between gap-4">
+                                            <div className="min-w-0">
+                                                <div className="font-medium">{fmtRange(m.startAt, m.endAt)}</div>
+                                                <div className="text-xs text-muted-foreground">
+                                                    Status: <Badge variant="secondary" className="ml-1">{m.status}</Badge>
+                                                    {m.location ? <> • Location: {m.location}</> : null}
+                                                    {m.place ? <> • {m.place}</> : null}
+                                                </div>
+                                                {m.message && <div className="mt-1 text-sm">{m.message}</div>}
+                                                {m.responseNote && (
+                                                    <div className="mt-1 text-xs text-muted-foreground">Note: {m.responseNote}</div>
+                                                )}
+                                            </div>
+
+                                            <div className="flex items-center gap-2">
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    title="Send a quick message"
+                                                    onClick={() => setNoteForId(m._id)}
+                                                    disabled={actingId === m._id}
+                                                >
+                                                    <MessageSquare className="mr-1 h-4 w-4" /> Message
                                                 </Button>
-                                            )}
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            ))}
+
+                                                {isInvitee && isPending && (
+                                                    <>
+                                                        <Button size="sm" onClick={() => acceptMeeting(m)} disabled={actingId === m._id}>
+                                                            {actingId === m._id ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Check className="mr-1 h-4 w-4" />}
+                                                            Accept
+                                                        </Button>
+                                                        <Button size="sm" variant="outline" onClick={() => declineMeeting(m)} disabled={actingId === m._id}>
+                                                            <X className="mr-1 h-4 w-4" /> Decline
+                                                        </Button>
+                                                    </>
+                                                )}
+
+                                                {(isRequester || isInvitee) && (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="destructive"
+                                                        onClick={() => removeMeeting(m)}
+                                                        disabled={actingId === m._id}
+                                                    >
+                                                        <Ban className="mr-1 h-4 w-4" /> Remove
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                );
+                            })}
                     </div>
                 )}
             </div>
+
+            {/* Single dialog instance (notes)*/}
+            <MeetingNoteDialog
+                open={Boolean(noteForId)}
+                onClose={() => setNoteForId(null)}
+                onSend={handleSendNote}
+                sending={noteSending}
+            />
+            {/* Schedule modal */}
+            <ScheduleMeetingModal
+                isOpen={modalOpen}
+                onClose={() => setModalOpen(false)}
+                eventId={eventId || undefined}
+                presetInviteeId={null}
+            />
         </div>
     );
 }

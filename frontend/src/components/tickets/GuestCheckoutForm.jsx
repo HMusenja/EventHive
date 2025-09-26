@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { checkoutGuest } from "@/services/ticketsApi";
+import { checkoutGuest } from "@/api/ticketsApi";
 
 export default function GuestCheckoutForm({
   eventId,
@@ -55,7 +55,7 @@ export default function GuestCheckoutForm({
 
       // Free → success screen
       if (res?.success && res?.mode === "free" && res?.orderId) {
-       navigate(`/tickets/success?event=${eventId}&ticket=${ticket._id}&order=${res.orderId}`)
+        navigate(`/tickets/success?event=${eventId}&ticket=${ticket._id}&order=${res.orderId}`)
         return;
       }
       // Paid → redirect to dummy session URL

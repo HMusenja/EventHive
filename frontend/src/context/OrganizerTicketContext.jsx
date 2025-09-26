@@ -11,7 +11,7 @@ import {
   createEventTicket,
   updateEventTicket,
   deleteEventTicket,
-} from "@/services/ticketsApi";
+} from "@/api/ticketsApi";
 import { toast } from "sonner";
 
 const OrganizerTicketContext = createContext(null);
@@ -75,7 +75,7 @@ function reducer(state, action) {
 
 export function OrganizerTicketProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initial);
-  
+
   const setEvent = useCallback((eventId) => {
     dispatch({ type: "SET_EVENT", eventId });
   }, []);
@@ -91,15 +91,15 @@ export function OrganizerTicketProvider({ children }) {
       const msg = res?.details?.errors
         ? Object.values(res.details.errors)[0]?.message || res.message
         : res?.details?.message ||
-          res?.message ||
-          e.message ||
-          "Failed to create ticket";
+        res?.message ||
+        e.message ||
+        "Failed to create ticket";
       dispatch({ type: "LOAD_ERROR", error: msg });
       toast.error(msg);
     }
   }, []);
 
-const create = useCallback(async (eventId, data) => {
+  const create = useCallback(async (eventId, data) => {
     dispatch({ type: "CREATE_START" });
     try {
       const item = await createEventTicket(eventId, data);

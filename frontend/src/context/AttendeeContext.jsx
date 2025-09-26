@@ -1,4 +1,3 @@
-// src/context/AttendeeContext.jsx
 import { createContext, useContext, useReducer, useCallback } from "react";
 import {
   attendeeReducer,
@@ -23,25 +22,25 @@ export function AttendeeProvider({ children }) {
 
   // Load the current user's attendee profile
   const loadMyAttendee = useCallback(async () => {
-  dispatch({ type: ATTENDEE_INIT });
-  try {
-    const data = await getMyAttendee(); // expect { attendee } or 404
-    dispatch({ type: SET_PROFILE, payload: data?.attendee || null });
-  } catch (err) {
-    const status = err?.response?.status;
-    if (status === 404) {
-      // no profile yet — initialize empty
-      dispatch({ type: SET_PROFILE, payload: null });
-    } else {
-      dispatch({
-        type: ATTENDEE_ERROR,
-        payload: err?.response?.data?.message || err?.message,
-      });
+    dispatch({ type: ATTENDEE_INIT });
+    try {
+      const data = await getMyAttendee(); // expect { attendee } or 404
+      dispatch({ type: SET_PROFILE, payload: data?.attendee || null });
+    } catch (err) {
+      const status = err?.response?.status;
+      if (status === 404) {
+        // no profile yet — initialize empty
+        dispatch({ type: SET_PROFILE, payload: null });
+      } else {
+        dispatch({
+          type: ATTENDEE_ERROR,
+          payload: err?.response?.data?.message || err?.message,
+        });
+      }
+    } finally {
+      dispatch({ type: ATTENDEE_READY });
     }
-  } finally {
-    dispatch({ type: ATTENDEE_READY });
-  }
-}, []);
+  }, []);
 
   // Save (create/update) attendee profile
   const saveMyAttendee = useCallback(
@@ -111,3 +110,4 @@ export function useAttendee() {
   if (!ctx) throw new Error("useAttendee must be used within AttendeeProvider");
   return ctx;
 }
+
