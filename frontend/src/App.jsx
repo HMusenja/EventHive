@@ -1,4 +1,4 @@
-import { setAxiosDefaults } from "./services/axiosConfig";
+import { setAxiosDefaults } from "./api/axiosConfig"; 
 import AppRoutes from "./routing/appRoutes";
 import { Toaster } from "sonner";
 

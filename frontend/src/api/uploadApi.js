@@ -1,4 +1,4 @@
-import axios from "@/services/axiosConfig";
+import axios from "axios";
 
 /**
  * Upload an image to the server (e.g. Cloudinary or local storage).
@@ -13,7 +13,7 @@ export async function uploadImage(file, { folder = "eventhive" } = {}) {
   formData.append("file", file);
   formData.append("folder", folder);
 
-  const { data } = await axios.post("/upload", formData, {
+  const { data } = await axios.post("/api/upload", formData, {
     headers: { "Content-Type": "multipart/form-data" },
   });
 

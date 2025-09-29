@@ -1,4 +1,4 @@
-import axios from "@/services/axiosConfig";
+import axios from "axios";
 
 /* Helpers */
 const is404 = (e) => e?.response?.status === 404;
@@ -13,7 +13,7 @@ export async function createMeeting(payload = {}) {
         return data;
     } catch (e) {
         if (!is404(e)) throw e;
-        const { data } = await axios.post("/meetings", body);
+        const { data } = await axios.post("/api/meetings", body);
         return data;
     }
 }
@@ -25,7 +25,7 @@ export async function listMeetings(params = {}, axiosConfig = {}) {
         return data;
     } catch (e) {
         if (!is404(e)) throw e;
-        const { data } = await axios.get("/meetings", { params, ...axiosConfig });
+        const { data } = await axios.get("/api/meetings", { params, ...axiosConfig });
         return data;
     }
 }
@@ -38,7 +38,7 @@ export async function updateMeetingStatus(id, status, note) {
         return data;
     } catch (e) {
         if (!is404(e)) throw e;
-        const { data } = await axios.patch(`/meetings/${id}/status`, body);
+        const { data } = await axios.patch(`/api/meetings/${id}/status`, body);
         return data;
     }
 }
@@ -61,11 +61,11 @@ export async function sendMeetingNote(id, text) {
         }
 
         try {
-            const { data } = await axios.post(`/meetings/${id}/notes`, { text });
+            const { data } = await axios.post(`/api/meetings/${id}/notes`, { text });
             return data;
         } catch (e3) {
             if (!is404(e3)) throw e3;
-            const { data } = await axios.patch(`/meetings/${id}/note`, { note: text });
+            const { data } = await axios.patch(`/api/meetings/${id}/note`, { note: text });
             return data;
         }
     }
@@ -82,7 +82,7 @@ export async function fetchEventAttendees(eventId, params = {}) {
         return data;
     } catch (e) {
         if (!is404(e)) throw e;
-        const { data } = await axios.get(`/events/${eventId}/attendees`, { params });
+        const { data } = await axios.get(`/api/events/${eventId}/attendees`, { params });
         return data;
     }
 }

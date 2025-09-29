@@ -4,6 +4,7 @@ import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import EventDetail from "@/pages/EventDetail";
 import EventList from "@/pages/EventList";
+import EditEventPage from "@/pages/events/EditEventPage";
 
 
 import Dashboard from "@/pages/dashboard/Dashboard";
@@ -113,6 +114,7 @@ export default function AppRoutes() {
         <Route path="profile" element={<Profile />} />
         <Route path="profile/edit" element={<EditProfilePage />} />
         <Route path="event/create" element={<CreateEventPage />} />
+         <Route path="event/:id/edit" element={<EditEventPage />} />
         <Route path="matches" element={<Matches />} />
         <Route path="meetings" element={<Meetings />} />
         <Route path="my-tickets" element={<MyTickets />} />

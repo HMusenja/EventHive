@@ -1,4 +1,4 @@
-import axios from "@/services/axiosConfig";
+import axios from "axios";
 
 export const scanCheckin = (eventId, { orderId, ticketRef }) =>
   axios

@@ -134,22 +134,29 @@ export function EventProvider({ children, autoLoad = true }) {
 
   }, []);
 
-  // Update (optimistic)
-   const updateEvent = useCallback(async (id, patch) => {
-     try {
-       dispatch({ type: "UPDATE_START" });
-       dispatch({ type: "UPDATE_OPTIMISTIC", payload: { _id: id, ...patch } });
-       const saved = await apiUpdateEvent(id, patch);
-       dispatch({ type: "UPDATE_SUCCESS", payload: saved });
-       return saved;
-     } catch (e) {
-       const msg = e?.message || "Failed to update event";
-       dispatch({ type: "UPDATE_ERROR", error: msg });
-       toast.error(msg);
-       throw e;
-     }
+  const updateEvent = useCallback(async (id, patch) => {
+   try {
+     dispatch({ type: "UPDATE_START" });
+     // 1) optimistic merge so UI updates immediately
+     dispatch({ type: "UPDATE_OPTIMISTIC", payload: { _id: id, ...patch } });
 
-  }, []);
+     // 2) call API and normalize the return shape
+     const res = await apiUpdateEvent(id, patch);
+     const saved = res?.data ?? res; // handles axios or raw return
+
+     // 3) if API didn't return the full event, fall back to local merge
+     const hasId = saved && (saved._id || saved.id);
+     const payload = hasId ? saved : { _id: id, ...patch };
+
+     dispatch({ type: "UPDATE_SUCCESS", payload });
+     return payload;
+   } catch (e) {
+     const msg = e?.message || "Failed to update event";
+     dispatch({ type: "UPDATE_ERROR", error: msg });
+     toast.error(msg);
+     throw e;
+   }
+ }, []);
 
   // Create
    const createEvent = useCallback(async (payload) => {

@@ -1,10 +1,9 @@
-import axios from "@/services/axiosConfig";
+import axios from "axios";
 
-export const registerUser = (data) => axios.post("/users/register", data);
 
+
+export const registerUser = (data) => axios.post("/api/users/register", data);
 export const loginUser = (data) =>
-    axios.post("/users/login", data, { withCredentials: true });
-
-export const getCurrentUser = () => axios.get("/users/me");
-
-export const logoutUser = () => axios.post("/users/logout");
+  axios.post("/api/users/login", data, { withCredentials: true });
+export const getCurrentUser = () => axios.get("/api/users/me");
+export const logoutUser = () => axios.post("/api/users/logout");

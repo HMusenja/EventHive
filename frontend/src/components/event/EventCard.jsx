@@ -216,7 +216,7 @@ export default memo(function EventCard({
                 onClick={() =>
                   onEdit
                     ? onEdit(event)
-                    : navigate(`/dashboard/organizer/events/${_id}/edit`)
+                    :  navigate(`/account/event/${_id}/edit`)
                 }
                 aria-label="Edit"
                 title="Edit"

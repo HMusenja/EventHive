@@ -1,114 +1,89 @@
-import axios from "@/services/axiosConfig";
+import axios from "axios";  // uses your configured axios instance
 
-// Small helpers
-const enc = (v) => encodeURIComponent(String(v ?? "").trim());
-const dataOr = (r, key, fallback) => (r?.data?.[key] ?? fallback);
-const normErr = (err, fb = "Request failed") => {
-  const res = err?.response?.data;
-  const e = new Error(res?.message || err?.message || fb);
-  e.code = res?.code || err?.code || "HTTP_ERROR";
-  e.status = err?.response?.status;
-  e.details = res;
-  return e;
+// GET tickets for an event
+export const fetchTickets = (eventId) =>
+  axios.get(`/api/tickets/event/${eventId}`)
+    .then(r => r.data?.tickets || [])
+    .catch(err => {
+      console.error("[ticketsApi.fetchTickets] error:", err?.response?.data || err.message);
+      throw err;
+    });
+
+  // GET tickets for logged-in user (instrumented)
+export const fetchMyTickets = () =>
+  axios.get("/api/tickets/mine")
+    .then(r => {
+      console.debug("[ticketsApi.fetchMyTickets] response data:", r?.data);
+      return r.data?.tickets || [];
+    })
+    .catch(err => {
+      // show more diagnostics
+      const resp = err?.response;
+      console.error("[ticketsApi.fetchMyTickets] API error:", {
+        status: resp?.status,
+        data: resp?.data,
+        headers: resp?.headers,
+        message: err.message,
+      });
+      throw err;
+    });
+
+
+// Guest checkout (free or paid dummy)
+export const checkoutGuest = (payload) =>
+  axios.post(`/api/ticketing/checkout-guest`, payload)
+    .then(r => r.data)
+    .catch(err => {
+      const res = err?.response?.data;
+      const norm = new Error(res?.message || "Request failed");
+      norm.code = res?.code || "HTTP_ERROR";
+      throw norm;
+    });
+
+    // Signed checkout (requires auth session)
+export const checkoutSigned = (payload) =>
+  axios.post(`/api/ticketing/checkout`, payload)
+    .then(r => r.data)
+    .catch(err => {
+      const res = err?.response?.data;
+      const norm = new Error(res?.message || "Request failed");
+      norm.code = res?.code || "HTTP_ERROR";
+      throw norm;
+    });
+
+// Dummy payment completion (simulate Stripe webhook)
+export const completeDummyPayment = (orderId) =>
+  axios.post(`/api/ticketing/dummy/complete`, { orderId })
+    .then(r => r.data)
+    .catch(err => {
+      const { status, data } = err?.response || {};
+      if (status === 409 && data?.code === "DUPLICATE_KEY") {
+        // consider this a success — backend already fulfilled
+        return { success: true, already: true, orderId };
+      }
+      throw err;
+    });
+
+    // Organizer: list ticket types for an event
+export const listEventTickets = (eventId) =>
+  axios.get(`/api/tickets/event/${eventId}`).then(r => r.data?.tickets || []);
+
+// Organizer: create a ticket type for an event
+export const createEventTicket = async (eventId, data) => {
+  try {
+    const r = await axios.post(`/tickets/events/${eventId}`, data);
+    return r.data?.ticket;
+  } catch (err) {
+    const res = err?.response?.data;
+    console.error("[createEventTicket] 422 payload sent:", data);
+    console.error("[createEventTicket] 422 response:", res);
+    throw err; // keep bubbling
+  }
 };
 
-// ————————————————————————————————
-// Reads
-// ————————————————————————————————
+// Organizer: update & delete (optional use later)
+export const updateEventTicket = (id, data) =>
+  axios.put(`/api/tickets/${id}`, data).then(r => r.data?.ticket);
 
-export async function fetchTickets(eventId) {
-  try {
-    const r = await axios.get(`/tickets/event/${enc(eventId)}`);
-    return dataOr(r, "tickets", []);
-  } catch (err) {
-    console.error("[ticketsApi.fetchTickets] error:", err?.response?.data || err.message);
-    throw normErr(err, "Failed to load event tickets");
-  }
-}
-
-export async function fetchMyTickets() {
-  try {
-    const r = await axios.get("/tickets/mine");
-    console.debug("[ticketsApi.fetchMyTickets] response data:", r?.data);
-    return dataOr(r, "tickets", []);
-  } catch (err) {
-    const resp = err?.response;
-    console.error("[ticketsApi.fetchMyTickets] API error:", {
-      status: resp?.status,
-      data: resp?.data,
-      headers: resp?.headers,
-      message: err?.message,
-    });
-    throw normErr(err, "Failed to load my tickets");
-  }
-}
-
-export const listEventTickets = fetchTickets;
-
-// ————————————————————————————————
-// Checkout flows
-// ————————————————————————————————
-
-export async function checkoutGuest(payload) {
-  try {
-    const r = await axios.post("/ticketing/checkout-guest", payload);
-    return r.data;
-  } catch (err) {
-    throw normErr(err, "Guest checkout failed");
-  }
-}
-
-export async function checkoutSigned(payload) {
-  try {
-    const r = await axios.post("/ticketing/checkout", payload);
-    return r.data;
-  } catch (err) {
-    throw normErr(err, "Checkout failed");
-  }
-}
-
-export async function completeDummyPayment(orderId) {
-  try {
-    const r = await axios.post("/ticketing/dummy/complete", { orderId });
-    return r.data;
-  } catch (err) {
-    const { status, data } = err?.response || {};
-    if (status === 409 && data?.code === "DUPLICATE_KEY") {
-      return { success: true, already: true, orderId };
-    }
-    throw normErr(err, "Payment completion failed");
-  }
-}
-
-// ————————————————————————————————
-// Organizer actions
-// ————————————————————————————————
-
-export async function createEventTicket(eventId, data) {
-  try {
-    const r = await axios.post(`/tickets/events/${enc(eventId)}`, data);
-    return dataOr(r, "ticket", null);
-  } catch (err) {
-    console.error("[ticketsApi.createEventTicket] payload sent:", data);
-    console.error("[ticketsApi.createEventTicket] response:", err?.response?.data);
-    throw normErr(err, "Failed to create ticket type");
-  }
-}
-
-export async function updateEventTicket(id, data) {
-  try {
-    const r = await axios.put(`/tickets/${enc(id)}`, data);
-    return dataOr(r, "ticket", null);
-  } catch (err) {
-    throw normErr(err, "Failed to update ticket");
-  }
-}
-
-export async function deleteEventTicket(id) {
-  try {
-    await axios.delete(`/tickets/${enc(id)}`);
-    return true;
-  } catch (err) {
-    throw normErr(err, "Failed to delete ticket");
-  }
-}
+export const deleteEventTicket = (id) =>
+  axios.delete(`/api/tickets/${id}`).then(() => true);

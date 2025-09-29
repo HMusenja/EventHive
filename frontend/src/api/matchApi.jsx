@@ -1,4 +1,4 @@
-import api from "@/services/axiosConfig";
+import api from "axios";
 
 // Utility to clean empty/null/undefined query params
 const clean = (obj = {}) =>
@@ -10,7 +10,7 @@ const clean = (obj = {}) =>
  */
 export async function fetchGlobalMatches({ interests = "", limit = 20 } = {}) {
   try {
-    const { data } = await api.get("/matches", {
+    const { data } = await api.get("/api/matches", {
       params: clean({ interests, limit }),
     });
     return Array.isArray(data?.matches) ? data.matches : [];
@@ -31,7 +31,7 @@ export async function fetchGlobalMatches({ interests = "", limit = 20 } = {}) {
 export async function getMatchSuggestions(eventId, { limit = 20 } = {}) {
   if (!eventId) throw new Error("eventId is required");
 
-  const { data } = await api.get(`/events/${eventId}/match/suggestions`, {
+  const { data } = await api.get(`/api/events/${eventId}/match/suggestions`, {
     params: { limit },
   });
 

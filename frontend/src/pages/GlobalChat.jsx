@@ -7,12 +7,11 @@ import { useAuth } from "@/context/AuthContext";
 import AuthModal from "@/components/AuthModal";
 
 
-
 /** --------- helpers --------- */
 const labelFor = (sender) => {
-    if (!sender) return "Anon";
-    if (typeof sender === "string") return sender;
-    return sender.fullName || sender.username || "Anon";
+   if (!sender) return "Anon";
+   if (typeof sender === "string") return sender;
+   return sender.fullName || sender.username || "Anon";
 };
 
 
@@ -26,12 +25,12 @@ const initials = (name) =>
 
 
 const formatTime = (d) => {
-    try {
-        const dd = new Date(d);
-        return dd.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    } catch {
-        return "";
-    }
+   try {
+       const dd = new Date(d);
+       return dd.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+   } catch {
+       return "";
+   }
 };
 
 
@@ -46,7 +45,6 @@ const isSameDay = (a, b) => {
 };
 
 
-
 // ---- id helpers ----
 const senderIdOf = (s) =>
    s && typeof s === "object" && s._id
@@ -54,7 +52,6 @@ const senderIdOf = (s) =>
        : typeof s === "string" && /^[0-9a-f]{24}$/i.test(s)
            ? s
            : null;
-
 
 
 const isMineFactory = (myId, myLabel) => (msg) => {
@@ -65,7 +62,6 @@ const isMineFactory = (myId, myLabel) => (msg) => {
 };
 
 
-
 /** --------- main --------- */
 export default function GlobalChat() {
    const { eventId } = useParams();
@@ -73,17 +69,9 @@ export default function GlobalChat() {
    const location = useLocation();
    const { user, isAuthenticated, loading } = useAuth();
 
-    const { eventId } = useParams();
-    const navigate = useNavigate();
-    const location = useLocation();
-    const { user, isAuthenticated, loading } = useAuth();
-
 
    // modal state when guest opens chat
    const [showAuth, setShowAuth] = useState(false);
-
-    // modal state when guest opens chat
-    const [showAuth, setShowAuth] = useState(false);
 
 
    // selected room state
@@ -91,288 +79,283 @@ export default function GlobalChat() {
        eventId ? { kind: "event", id: String(eventId) } : { kind: "global", id: "global" }
    );
 
-    // selected room state
-    const [activeRoom, setActiveRoom] = useState(
-        eventId ? { kind: "event", id: String(eventId) } : { kind: "global", id: "global" }
-    );
+
+   // events list
+   const [events, setEvents] = useState([]);
+   const [eventsLoading, setEventsLoading] = useState(true);
+   const [eventsQuery, setEventsQuery] = useState("");
 
 
-    // events list
-    const [events, setEvents] = useState([]);
-    const [eventsLoading, setEventsLoading] = useState(true);
-    const [eventsQuery, setEventsQuery] = useState("");
+   // chat state
+   const [messages, setMessages] = useState([]);
+   const [loadingHistory, setLoadingHistory] = useState(true);
+   const [text, setText] = useState("");
+   const [showEmoji, setShowEmoji] = useState(false);
 
 
-    // chat state
-    const [messages, setMessages] = useState([]);
-    const [loadingHistory, setLoadingHistory] = useState(true);
-    const [text, setText] = useState("");
-    const [showEmoji, setShowEmoji] = useState(false);
+   const myLabel = useMemo(
+       () => user?.fullName || user?.username || "Anon",
+       [user?.fullName, user?.username]
+   );
+   const myId = useMemo(() => (user?._id ? String(user._id) : null), [user?._id]);
+   const isMine = useMemo(() => isMineFactory(myId, myLabel), [myId, myLabel]);
 
 
-    const myLabel = useMemo(
-        () => user?.fullName || user?.username || "Anon",
-        [user?.fullName, user?.username]
-    );
-    const myId = useMemo(() => (user?._id ? String(user._id) : null), [user?._id]);
-    const isMine = useMemo(() => isMineFactory(myId, myLabel), [myId, myLabel]);
+   const msgIndex = useRef(new Map());
+   const pendingByText = useRef(new Map());
 
 
-    const msgIndex = useRef(new Map());
-    const pendingByText = useRef(new Map());
+   const upsert = (m) => {
+       if (!m?._id) m._id = `tmp-${Date.now()}-${Math.random()}`;
+       if (msgIndex.current.has(m._id)) return;
+       msgIndex.current.set(m._id, true);
+       setMessages((prev) => [...prev, m]);
+   };
 
 
-    const upsert = (m) => {
-        if (!m?._id) m._id = `tmp-${Date.now()}-${Math.random()}`;
-        if (msgIndex.current.has(m._id)) return;
-        msgIndex.current.set(m._id, true);
-        setMessages((prev) => [...prev, m]);
-    };
+   const replaceTmpWithSaved = (tmpId, saved) => {
+       msgIndex.current.set(saved._id, true);
+       setMessages((prev) => {
+           const next = prev.slice();
+           const idx = next.findIndex((x) => x._id === tmpId);
+           if (idx !== -1) next.splice(idx, 1, saved);
+           else next.push(saved);
+           return next;
+       });
+   };
 
 
-    const replaceTmpWithSaved = (tmpId, saved) => {
-        msgIndex.current.set(saved._id, true);
-        setMessages((prev) => {
-            const next = prev.slice();
-            const idx = next.findIndex((x) => x._id === tmpId);
-            if (idx !== -1) next.splice(idx, 1, saved);
-            else next.push(saved);
-            return next;
-        });
-    };
+   /** ----- open auth modal for guests ----- */
+   useEffect(() => {
+       if (!loading && !isAuthenticated) setShowAuth(true);
+   }, [loading, isAuthenticated]);
 
 
-    /** ----- open auth modal for guests ----- */
-    useEffect(() => {
-        if (!loading && !isAuthenticated) setShowAuth(true);
-    }, [loading, isAuthenticated]);
+   /** ----- fetch events (auth only) ----- */
+   useEffect(() => {
+       if (!isAuthenticated) {
+           setEvents([]);
+           setEventsLoading(false);
+           return;
+       }
 
 
-    /** ----- fetch events (auth only) ----- */
-    useEffect(() => {
-        if (!isAuthenticated) {
-            setEvents([]);
-            setEventsLoading(false);
-            return;
-        }
+       let alive = true;
+       (async () => {
+           try {
+               setEventsLoading(true);
+               const { data } = await api.get("events", {
+                   params: { limit: 25, sort: "startAt:asc" },
+               });
+               if (!alive) return;
+               setEvents(Array.isArray(data) ? data : data?.events || []);
+           } catch (e) {
+               console.error("[global-chat] Failed to load events", e);
+               if (alive) setEvents([]);
+           } finally {
+               if (alive) setEventsLoading(false);
+           }
+       })();
 
 
-        let alive = true;
-        (async () => {
-            try {
-                setEventsLoading(true);
-                const { data } = await api.get("events", {
-                    params: { limit: 25, sort: "startAt:asc" },
-                });
-                if (!alive) return;
-                setEvents(Array.isArray(data) ? data : data?.events || []);
-            } catch (e) {
-                console.error("[global-chat] Failed to load events", e);
-                if (alive) setEvents([]);
-            } finally {
-                if (alive) setEventsLoading(false);
-            }
-        })();
+       return () => {
+           alive = false;
+       };
+   }, [isAuthenticated]);
 
 
-        return () => {
-            alive = false;
-        };
-    }, [isAuthenticated]);
+   /** ----- background cover ----- */
+   const activeEvent = useMemo(() => {
+       if (activeRoom.kind !== "event") return null;
+       return events.find((e) => String(e._id) === String(activeRoom.id)) || null;
+   }, [activeRoom, events]);
 
 
-    /** ----- background cover ----- */
-    const activeEvent = useMemo(() => {
-        if (activeRoom.kind !== "event") return null;
-        return events.find((e) => String(e._id) === String(activeRoom.id)) || null;
-    }, [activeRoom, events]);
+   const heroImage = useMemo(() => {
+       const e = activeEvent;
+       if (!e) return null;
+       return e.coverImage || e.cover?.url || e.bannerUrl || e.images?.banner || e.heroImage || null;
+   }, [activeEvent]);
 
 
-    const heroImage = useMemo(() => {
-        const e = activeEvent;
-        if (!e) return null;
-        return e.coverImage || e.cover?.url || e.bannerUrl || e.images?.banner || e.heroImage || null;
-    }, [activeEvent]);
+   /** ----- load history ----- */
+   const roomKey = activeRoom.kind === "global" ? "global" : String(activeRoom.id);
 
 
-    /** ----- load history ----- */
-    const roomKey = activeRoom.kind === "global" ? "global" : String(activeRoom.id);
+   useEffect(() => {
+       if (!isAuthenticated) {
+           // stop the endless spinner for guests and show auth overlay
+           setLoadingHistory(false);
+           msgIndex.current = new Map();
+           setMessages([]);
+           return;
+       }
 
 
-    useEffect(() => {
-        if (!isAuthenticated) {
-            // stop the endless spinner for guests and show auth overlay
-            setLoadingHistory(false);
-            msgIndex.current = new Map();
-            setMessages([]);
-            return;
-        }
+       let alive = true;
+       setLoadingHistory(true);
+       msgIndex.current = new Map();
+       setMessages([]);
 
 
-        let alive = true;
-        setLoadingHistory(true);
-        msgIndex.current = new Map();
-        setMessages([]);
+       (async () => {
+           try {
+               if (activeRoom.kind === "global") {
+                   const { data } = await api.get("chat/global/messages");
+                   if (!alive) return;
+                   (data || []).forEach(upsert);
+               } else {
+                   const { data } = await api.get(`events/${activeRoom.id}/messages`);
+                   if (!alive) return;
+                   (data || []).forEach(upsert);
+               }
+           } catch (e) {
+               console.error("[global-chat] load history failed", e);
+           } finally {
+               if (alive) setLoadingHistory(false);
+           }
+       })();
 
 
-        (async () => {
-            try {
-                if (activeRoom.kind === "global") {
-                    const { data } = await api.get("chat/global/messages");
-                    if (!alive) return;
-                    (data || []).forEach(upsert);
-                } else {
-                    const { data } = await api.get(`events/${activeRoom.id}/messages`);
-                    if (!alive) return;
-                    (data || []).forEach(upsert);
-                }
-            } catch (e) {
-                console.error("[global-chat] load history failed", e);
-            } finally {
-                if (alive) setLoadingHistory(false);
-            }
-        })();
+       return () => { alive = false; };
+   }, [roomKey, activeRoom.kind, activeRoom.id, isAuthenticated]);
 
 
-        return () => { alive = false; };
-    }, [roomKey, activeRoom.kind, activeRoom.id, isAuthenticated]);
+   /** ----- socket join/leave ----- */
+   useEffect(() => {
+       if (!user || !isAuthenticated) return;
 
 
-    /** ----- socket join/leave ----- */
-    useEffect(() => {
-        if (!user || !isAuthenticated) return;
+       connectSocket();
 
 
-        connectSocket();
+       const rk = roomKey;
+       const onConnect = () => socket.emit("join_room", rk);
+       const onMsg = (payload) => {
+           if (!payload || payload.room !== rk) return;
 
 
-        const rk = roomKey;
-        const onConnect = () => socket.emit("join_room", rk);
-        const onMsg = (payload) => {
-            if (!payload || payload.room !== rk) return;
+           // dedupe optimistic message by senderId + text
+           const sid = senderIdOf(payload.sender);
+           if (sid === myId && pendingByText.current.has(payload.text)) {
+               const { tmpId, ts } = pendingByText.current.get(payload.text) || {};
+               if (ts && Date.now() - ts <= 10_000 && tmpId) {
+                   pendingByText.current.delete(payload.text);
+                   replaceTmpWithSaved(tmpId, payload);
+                   return;
+               }
+               pendingByText.current.delete(payload.text);
+           }
+           upsert(payload);
+       };
 
 
-            // dedupe optimistic message by senderId + text
-            const sid = senderIdOf(payload.sender);
-            if (sid === myId && pendingByText.current.has(payload.text)) {
-                const { tmpId, ts } = pendingByText.current.get(payload.text) || {};
-                if (ts && Date.now() - ts <= 10_000 && tmpId) {
-                    pendingByText.current.delete(payload.text);
-                    replaceTmpWithSaved(tmpId, payload);
-                    return;
-                }
-                pendingByText.current.delete(payload.text);
-            }
-            upsert(payload);
-        };
+       socket.on("connect", onConnect);
+       socket.on("chat_message", onMsg);
+       socket.emit("join_room", rk);
 
 
-        socket.on("connect", onConnect);
-        socket.on("chat_message", onMsg);
-        socket.emit("join_room", rk);
+       return () => {
+           socket.off("connect", onConnect);
+           socket.off("chat_message", onMsg);
+           socket.emit("leave_room", rk);
+       };
+   }, [roomKey, user?._id, myId, isAuthenticated]);
 
 
-        return () => {
-            socket.off("connect", onConnect);
-            socket.off("chat_message", onMsg);
-            socket.emit("leave_room", rk);
-        };
-    }, [roomKey, user?._id, myId, isAuthenticated]);
+   /** ----- auto-scroll ----- */
+   const scrollerRef = useRef(null);
+   useEffect(() => {
+       const el = scrollerRef.current;
+       if (!el) return;
+       el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+   }, [messages.length]);
 
 
-    /** ----- auto-scroll ----- */
-    const scrollerRef = useRef(null);
-    useEffect(() => {
-        const el = scrollerRef.current;
-        if (!el) return;
-        el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-    }, [messages.length]);
+   /** ----- emoji helper ----- */
+   const textareaRef = useRef(null);
+   const insertEmoji = (emoji) => {
+       const el = textareaRef.current;
+       if (!el) {
+           setText((t) => t + emoji);
+           return;
+       }
+       const start = el.selectionStart ?? text.length;
+       const end = el.selectionEnd ?? text.length;
+       const next = text.slice(0, start) + emoji + text.slice(end);
+       setText(next);
+       setTimeout(() => {
+           el.focus();
+           const pos = start + emoji.length;
+           el.setSelectionRange(pos, pos);
+       }, 0);
+   };
 
 
-    /** ----- emoji helper ----- */
-    const textareaRef = useRef(null);
-    const insertEmoji = (emoji) => {
-        const el = textareaRef.current;
-        if (!el) {
-            setText((t) => t + emoji);
-            return;
-        }
-        const start = el.selectionStart ?? text.length;
-        const end = el.selectionEnd ?? text.length;
-        const next = text.slice(0, start) + emoji + text.slice(end);
-        setText(next);
-        setTimeout(() => {
-            el.focus();
-            const pos = start + emoji.length;
-            el.setSelectionRange(pos, pos);
-        }, 0);
-    };
+   /** ----- group rows ----- */
+   const rows = useMemo(() => {
+       const out = [];
+       let last = null;
+       for (const m of messages) {
+           if (!last || !isSameDay(last.createdAt, m.createdAt)) {
+               out.push({
+                   _kind: "day",
+                   key: `day-${new Date(m.createdAt).toDateString()}`,
+                   label: new Date(m.createdAt).toLocaleDateString(undefined, {
+                       weekday: "short",
+                       month: "short",
+                       day: "numeric",
+                   }),
+               });
+           }
+           out.push({ _kind: "msg", ...m });
+           last = m;
+       }
+       return out;
+   }, [messages]);
 
 
-    /** ----- group rows ----- */
-    const rows = useMemo(() => {
-        const out = [];
-        let last = null;
-        for (const m of messages) {
-            if (!last || !isSameDay(last.createdAt, m.createdAt)) {
-                out.push({
-                    _kind: "day",
-                    key: `day-${new Date(m.createdAt).toDateString()}`,
-                    label: new Date(m.createdAt).toLocaleDateString(undefined, {
-                        weekday: "short",
-                        month: "short",
-                        day: "numeric",
-                    }),
-                });
-            }
-            out.push({ _kind: "msg", ...m });
-            last = m;
-        }
-        return out;
-    }, [messages]);
+   /** ----- send ----- */
+   const sendMessage = (e) => {
+       e.preventDefault();
+       if (!isAuthenticated) return;
+       const trimmed = text.trim();
+       if (!trimmed) return;
 
 
-    /** ----- send ----- */
-    const sendMessage = (e) => {
-        e.preventDefault();
-        if (!isAuthenticated) return;
-        const trimmed = text.trim();
-        if (!trimmed) return;
+       const tmpId = `tmp-${Date.now()}`;
+       const tmp = {
+           _id: tmpId,
+           text: trimmed,
+           sender: { _id: myId, fullName: user?.fullName, username: user?.username },
+           createdAt: new Date().toISOString(),
+           room: roomKey,
+       };
+       if (!msgIndex.current.has(tmpId)) {
+           msgIndex.current.set(tmpId, true);
+           setMessages((prev) => [...prev, tmp]);
+       }
+       setText("");
+       pendingByText.current.set(trimmed, { tmpId, ts: Date.now() });
 
 
-        const tmpId = `tmp-${Date.now()}`;
-        const tmp = {
-            _id: tmpId,
-            text: trimmed,
-            sender: { _id: myId, fullName: user?.fullName, username: user?.username },
-            createdAt: new Date().toISOString(),
-            room: roomKey,
-        };
-        if (!msgIndex.current.has(tmpId)) {
-            msgIndex.current.set(tmpId, true);
-            setMessages((prev) => [...prev, tmp]);
-        }
-        setText("");
-        pendingByText.current.set(trimmed, { tmpId, ts: Date.now() });
+       socket.emit("chat_message", { room: roomKey, text: trimmed }, (saved) => {
+           if (saved && saved._id) {
+               pendingByText.current.delete(trimmed);
+               replaceTmpWithSaved(tmpId, saved);
+           }
+       });
+   };
 
 
-        socket.emit("chat_message", { room: roomKey, text: trimmed }, (saved) => {
-            if (saved && saved._id) {
-                pendingByText.current.delete(trimmed);
-                replaceTmpWithSaved(tmpId, saved);
-            }
-        });
-    };
-
-
-    /** ----- sidebar filter ----- */
-    const filteredEvents = useMemo(() => {
-        const q = eventsQuery.trim().toLowerCase();
-        if (!q) return events;
-        return events.filter((e) =>
-            [e.title, e.subtitle, e.slug].filter(Boolean).some((t) => String(t).toLowerCase().includes(q))
-        );
-    }, [events, eventsQuery]);
+   /** ----- sidebar filter ----- */
+   const filteredEvents = useMemo(() => {
+       const q = eventsQuery.trim().toLowerCase();
+       if (!q) return events;
+       return events.filter((e) =>
+           [e.title, e.subtitle, e.slug].filter(Boolean).some((t) => String(t).toLowerCase().includes(q))
+       );
+   }, [events, eventsQuery]);
 
 
    const headerTitle = activeRoom.kind === "global" ? "Global Chat" : activeEvent?.title || "Event Chat";
@@ -380,271 +363,271 @@ export default function GlobalChat() {
        activeRoom.kind === "global" ? "Everyone in one place ✨" : activeEvent?.subtitle || activeEvent?.slug || "";
 
 
-    return (
-        <div className="relative min-h-screen">
-            {/* background */}
-            {heroImage ? (
-                <div className="pointer-events-none absolute inset-0 -z-10">
-                    <img
-                        src={heroImage}
-                        alt={activeEvent?.title || "Event cover"}
-                        className="h-full w-full object-cover"
-                        loading="lazy"
-                        decoding="async"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
-                </div>
-            ) : (
-                <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-t from-black/80 via-black/10 to-white" />
-            )}
+   return (
+       <div className="relative min-h-screen">
+           {/* background */}
+           {heroImage ? (
+               <div className="pointer-events-none absolute inset-0 -z-10">
+                   <img
+                       src={heroImage}
+                       alt={activeEvent?.title || "Event cover"}
+                       className="h-full w-full object-cover"
+                       loading="lazy"
+                       decoding="async"
+                   />
+                   <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
+               </div>
+           ) : (
+               <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-t from-black/80 via-black/10 to-white" />
+           )}
 
 
-            {/* layout */}
-            <div className="mx-auto max-w-7xl px-3 md:px-6 py-6 grid grid-cols-1 md:grid-cols-[280px_minmax(0,1fr)] gap-4">
-                {/* Sidebar */}
-                <aside className="rounded-2xl border bg-background/70 backdrop-blur p-3 md:p-4 space-y-4">
-                    <div className="flex items-center gap-2">
-                        <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-white shadow">
-                            <MessageSquareText className="h-4 w-4" />
-                        </div>
-                        <div>
-                            <div className="font-semibold leading-tight">Chats</div>
-                            <div className="text-xs text-muted-foreground">Global & events</div>
-                        </div>
-                    </div>
+           {/* layout */}
+           <div className="mx-auto max-w-7xl px-3 md:px-6 py-6 grid grid-cols-1 md:grid-cols-[280px_minmax(0,1fr)] gap-4">
+               {/* Sidebar */}
+               <aside className="rounded-2xl border bg-background/70 backdrop-blur p-3 md:p-4 space-y-4">
+                   <div className="flex items-center gap-2">
+                       <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-white shadow">
+                           <MessageSquareText className="h-4 w-4" />
+                       </div>
+                       <div>
+                           <div className="font-semibold leading-tight">Chats</div>
+                           <div className="text-xs text-muted-foreground">Global & events</div>
+                       </div>
+                   </div>
 
 
-                    <button
-                        className={`w-full text-left rounded-xl px-3 py-2 border transition flex items-center gap-2 ${activeRoom.kind === "global" ? "bg-muted border-border" : "hover:bg-muted"
-                            }`}
-                        onClick={() => {
-                            setActiveRoom({ kind: "global", id: "global" });
-                            navigate("/chat/global", { replace: false });
-                        }}
-                    >
-                        <Globe className="h-4 w-4" />
-                        <span className="font-medium">Global chat</span>
-                    </button>
+                   <button
+                       className={`w-full text-left rounded-xl px-3 py-2 border transition flex items-center gap-2 ${activeRoom.kind === "global" ? "bg-muted border-border" : "hover:bg-muted"
+                           }`}
+                       onClick={() => {
+                           setActiveRoom({ kind: "global", id: "global" });
+                           navigate("/chat/global", { replace: false });
+                       }}
+                   >
+                       <Globe className="h-4 w-4" />
+                       <span className="font-medium">Global chat</span>
+                   </button>
 
 
-                    <div className="relative">
-                        <input
-                            className="w-full rounded-xl border bg-background pl-8 pr-3 py-2 text-sm"
-                            placeholder="Search events…"
-                            value={eventsQuery}
-                            onChange={(e) => setEventsQuery(e.target.value)}
-                        />
-                        <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                    </div>
+                   <div className="relative">
+                       <input
+                           className="w-full rounded-xl border bg-background pl-8 pr-3 py-2 text-sm"
+                           placeholder="Search events…"
+                           value={eventsQuery}
+                           onChange={(e) => setEventsQuery(e.target.value)}
+                       />
+                       <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                   </div>
 
 
-                    <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
-                        {eventsLoading && (
-                            <div className="flex items-center justify-center py-6 text-muted-foreground">
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading events…
-                            </div>
-                        )}
-                        {!eventsLoading && filteredEvents.length === 0 && (
-                            <div className="text-xs text-muted-foreground">No events found.</div>
-                        )}
-                        {filteredEvents.map((e) => {
-                            const active = activeRoom.kind === "event" && String(activeRoom.id) === String(e._id);
-                            const thumb = e.coverImage || e.cover?.url || e.bannerUrl || e.images?.banner || e.heroImage;
-                            return (
-                                <button
-                                    key={e._id}
-                                    className={`w-full text-left rounded-xl px-2.5 py-2 border transition flex items-center gap-3 ${active ? "bg-muted border-border" : "hover:bg-muted"
-                                        }`}
-                                    onClick={() => {
-                                        setActiveRoom({ kind: "event", id: String(e._id) });
-                                        navigate(`/chat/event/${e._id}`, { replace: false });
-                                    }}
-                                    title={e.title}
-                                >
-                                    <div className="h-8 w-8 rounded-lg overflow-hidden bg-muted shrink-0">
-                                        {thumb ? (
-                                            <img src={thumb} className="h-full w-full object-cover" />
-                                        ) : (
-                                            <div className="h-full w-full grid place-items-center text-xs text-muted-foreground">
-                                                {initials(e.title)}
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="min-w-0">
-                                        <div className="truncate text-sm font-medium">{e.title}</div>
-                                        {!!e.subtitle && (
-                                            <div className="truncate text-[11px] text-muted-foreground">{e.subtitle}</div>
-                                        )}
-                                    </div>
-                                </button>
-                            );
-                        })}
-                    </div>
-                </aside>
+                   <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
+                       {eventsLoading && (
+                           <div className="flex items-center justify-center py-6 text-muted-foreground">
+                               <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading events…
+                           </div>
+                       )}
+                       {!eventsLoading && filteredEvents.length === 0 && (
+                           <div className="text-xs text-muted-foreground">No events found.</div>
+                       )}
+                       {filteredEvents.map((e) => {
+                           const active = activeRoom.kind === "event" && String(activeRoom.id) === String(e._id);
+                           const thumb = e.coverImage || e.cover?.url || e.bannerUrl || e.images?.banner || e.heroImage;
+                           return (
+                               <button
+                                   key={e._id}
+                                   className={`w-full text-left rounded-xl px-2.5 py-2 border transition flex items-center gap-3 ${active ? "bg-muted border-border" : "hover:bg-muted"
+                                       }`}
+                                   onClick={() => {
+                                       setActiveRoom({ kind: "event", id: String(e._id) });
+                                       navigate(`/chat/event/${e._id}`, { replace: false });
+                                   }}
+                                   title={e.title}
+                               >
+                                   <div className="h-8 w-8 rounded-lg overflow-hidden bg-muted shrink-0">
+                                       {thumb ? (
+                                           <img src={thumb} className="h-full w-full object-cover" />
+                                       ) : (
+                                           <div className="h-full w-full grid place-items-center text-xs text-muted-foreground">
+                                               {initials(e.title)}
+                                           </div>
+                                       )}
+                                   </div>
+                                   <div className="min-w-0">
+                                       <div className="truncate text-sm font-medium">{e.title}</div>
+                                       {!!e.subtitle && (
+                                           <div className="truncate text-[11px] text-muted-foreground">{e.subtitle}</div>
+                                       )}
+                                   </div>
+                               </button>
+                           );
+                       })}
+                   </div>
+               </aside>
 
 
-                {/* Chat panel */}
-                <section className="relative rounded-2xl border bg-background/70 backdrop-blur shadow-sm">
-                    {/* Header */}
-                    <div className="flex items-center gap-3 border-b p-3 md:p-4">
-                        <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-white shadow-md">
-                            <MessageSquareText className="h-5 w-5" />
-                        </div>
-                        <div>
-                            <h1 className="text-xl md:text-2xl font-bold tracking-tight">{headerTitle}</h1>
-                            {!!headerSubtitle && <p className="text-xs text-muted-foreground">{headerSubtitle}</p>}
-                        </div>
-                    </div>
+               {/* Chat panel */}
+               <section className="relative rounded-2xl border bg-background/70 backdrop-blur shadow-sm">
+                   {/* Header */}
+                   <div className="flex items-center gap-3 border-b p-3 md:p-4">
+                       <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-white shadow-md">
+                           <MessageSquareText className="h-5 w-5" />
+                       </div>
+                       <div>
+                           <h1 className="text-xl md:text-2xl font-bold tracking-tight">{headerTitle}</h1>
+                           {!!headerSubtitle && <p className="text-xs text-muted-foreground">{headerSubtitle}</p>}
+                       </div>
+                   </div>
 
 
-                    {/* History */}
-                    <div
-                        ref={scrollerRef}
-                        className="h-[60vh] w-full overflow-y-auto rounded-2xl p-4 md:p-6 space-y-3 bg-gradient-to-b from-muted/60 to-transparent"
-                    >
-                        {loadingHistory && (
-                            <div className="flex items-center justify-center py-10 text-muted-foreground">
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading messages…
-                            </div>
-                        )}
+                   {/* History */}
+                   <div
+                       ref={scrollerRef}
+                       className="h-[60vh] w-full overflow-y-auto rounded-2xl p-4 md:p-6 space-y-3 bg-gradient-to-b from-muted/60 to-transparent"
+                   >
+                       {loadingHistory && (
+                           <div className="flex items-center justify-center py-10 text-muted-foreground">
+                               <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading messages…
+                           </div>
+                       )}
 
 
-                        {!loadingHistory && rows.length === 0 && (
-                            <div className="text-center text-muted-foreground py-10">Be the first to say hello ✨</div>
-                        )}
+                       {!loadingHistory && rows.length === 0 && (
+                           <div className="text-center text-muted-foreground py-10">Be the first to say hello ✨</div>
+                       )}
 
 
-                        {rows.map((row) =>
-                            row._kind === "day" ? (
-                                <div key={row.key} className="sticky top-2 z-10">
-                                    <div className="mx-auto w-max rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground shadow-sm">
-                                        {row.label}
-                                    </div>
-                                </div>
-                            ) : (
-                                <MessageBubble key={row._id} msg={row} isMe={isMine(row)} />
-                            )
-                        )}
-                    </div>
+                       {rows.map((row) =>
+                           row._kind === "day" ? (
+                               <div key={row.key} className="sticky top-2 z-10">
+                                   <div className="mx-auto w-max rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground shadow-sm">
+                                       {row.label}
+                                   </div>
+                               </div>
+                           ) : (
+                               <MessageBubble key={row._id} msg={row} isMe={isMine(row)} />
+                           )
+                       )}
+                   </div>
 
 
-                    {/* Composer */}
-                    <form onSubmit={sendMessage} className="relative border-t p-3 md:p-4">
-                        <div className="flex items-end gap-2">
-                            <textarea
-                                ref={textareaRef}
-                                rows={1}
-                                value={text}
-                                onChange={(e) => setText(e.target.value)}
-                                onInput={(e) => {
-                                    e.currentTarget.style.height = "auto";
-                                    e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
-                                }}
-                                placeholder={`Message ${activeRoom.kind === "global" ? "Global chat" : "this event"}…`}
-                                className="min-h-10 max-h-28 flex-1 resize-none rounded-xl border bg-background px-3 py-2 leading-6 outline-none ring-0 focus:border-primary/40"
-                                disabled={!isAuthenticated}
-                            />
+                   {/* Composer */}
+                   <form onSubmit={sendMessage} className="relative border-t p-3 md:p-4">
+                       <div className="flex items-end gap-2">
+                           <textarea
+                               ref={textareaRef}
+                               rows={1}
+                               value={text}
+                               onChange={(e) => setText(e.target.value)}
+                               onInput={(e) => {
+                                   e.currentTarget.style.height = "auto";
+                                   e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
+                               }}
+                               placeholder={`Message ${activeRoom.kind === "global" ? "Global chat" : "this event"}…`}
+                               className="min-h-10 max-h-28 flex-1 resize-none rounded-xl border bg-background px-3 py-2 leading-6 outline-none ring-0 focus:border-primary/40"
+                               disabled={!isAuthenticated}
+                           />
 
 
-                            <button
-                                type="button"
-                                className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border bg-background transition ${showEmoji ? "bg-muted" : "hover:bg-muted"
-                                    }`}
-                                title="Emoji"
-                                onClick={() => setShowEmoji((v) => !v)}
-                                disabled={!isAuthenticated}
-                            >
-                                🙂
-                            </button>
+                           <button
+                               type="button"
+                               className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border bg-background transition ${showEmoji ? "bg-muted" : "hover:bg-muted"
+                                   }`}
+                               title="Emoji"
+                               onClick={() => setShowEmoji((v) => !v)}
+                               disabled={!isAuthenticated}
+                           >
+                               🙂
+                           </button>
 
 
-                            <button
-                                type="submit"
-                                disabled={!text.trim() || !isAuthenticated}
-                                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-primary-foreground shadow hover:brightness-110 disabled:opacity-50"
-                            >
-                                Send
-                            </button>
-                        </div>
+                           <button
+                               type="submit"
+                               disabled={!text.trim() || !isAuthenticated}
+                               className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-primary-foreground shadow hover:brightness-110 disabled:opacity-50"
+                           >
+                               Send
+                           </button>
+                       </div>
 
 
-                        {/* Emoji popover */}
-                        {showEmoji && (
-                            <div className="absolute bottom-16 right-3 z-20 w-[320px] rounded-2xl border bg-background p-2 shadow-xl">
-                                <input
-                                    type="text"
-                                    placeholder="Search emojis…"
-                                    className="mb-2 w-full rounded-lg border bg-background px-2 py-1 text-sm"
-                                    onChange={(e) => {
-                                        const q = e.target.value.trim().toLowerCase();
-                                        const root = e.currentTarget.nextSibling;
-                                        for (const btn of root.querySelectorAll("button[data-emoji]")) {
-                                            const em = btn.getAttribute("data-emoji-label") || "";
-                                            btn.style.display = em.includes(q) ? "" : "none";
-                                        }
-                                    }}
-                                />
-                                <div className="max-h-60 overflow-y-auto pr-1">
-                                    <div className="grid grid-cols-8 gap-1">
-                                        {COMMON_EMOJIS.map((em, i) => (
-                                            <button
-                                                key={i}
-                                                type="button"
-                                                data-emoji
-                                                data-emoji-label={em}
-                                                className="h-8 w-8 select-none rounded-lg hover:bg-muted"
-                                                onClick={() => {
-                                                    insertEmoji(em);
-                                                    textareaRef.current?.focus();
-                                                }}
-                                                title={em}
-                                            >
-                                                {em}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                                <div className="mt-2 flex justify-end">
-                                    <button
-                                        type="button"
-                                        className="text-sm text-muted-foreground hover:text-foreground"
-                                        onClick={() => setShowEmoji(false)}
-                                    >
-                                        Close
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-                    </form>
+                       {/* Emoji popover */}
+                       {showEmoji && (
+                           <div className="absolute bottom-16 right-3 z-20 w-[320px] rounded-2xl border bg-background p-2 shadow-xl">
+                               <input
+                                   type="text"
+                                   placeholder="Search emojis…"
+                                   className="mb-2 w-full rounded-lg border bg-background px-2 py-1 text-sm"
+                                   onChange={(e) => {
+                                       const q = e.target.value.trim().toLowerCase();
+                                       const root = e.currentTarget.nextSibling;
+                                       for (const btn of root.querySelectorAll("button[data-emoji]")) {
+                                           const em = btn.getAttribute("data-emoji-label") || "";
+                                           btn.style.display = em.includes(q) ? "" : "none";
+                                       }
+                                   }}
+                               />
+                               <div className="max-h-60 overflow-y-auto pr-1">
+                                   <div className="grid grid-cols-8 gap-1">
+                                       {COMMON_EMOJIS.map((em, i) => (
+                                           <button
+                                               key={i}
+                                               type="button"
+                                               data-emoji
+                                               data-emoji-label={em}
+                                               className="h-8 w-8 select-none rounded-lg hover:bg-muted"
+                                               onClick={() => {
+                                                   insertEmoji(em);
+                                                   textareaRef.current?.focus();
+                                               }}
+                                               title={em}
+                                           >
+                                               {em}
+                                           </button>
+                                       ))}
+                                   </div>
+                               </div>
+                               <div className="mt-2 flex justify-end">
+                                   <button
+                                       type="button"
+                                       className="text-sm text-muted-foreground hover:text-foreground"
+                                       onClick={() => setShowEmoji(false)}
+                                   >
+                                       Close
+                                   </button>
+                               </div>
+                           </div>
+                       )}
+                   </form>
 
 
-                    {/* Guest overlay (and modal mount) */}
-                    {!loading && !isAuthenticated && (
-                        <div className="absolute inset-0 z-20 grid place-items-center bg-background/70 backdrop-blur-sm rounded-2xl">
-                            <div className="max-w-sm w-[92%] rounded-2xl border bg-background p-6 text-center shadow-xl">
-                                <h3 className="text-lg font-semibold">Sign in to join the chat</h3>
-                                <p className="mt-1 text-sm text-muted-foreground">
-                                    Create an account or log in to send messages.
-                                </p>
-                                <div className="mt-4 flex items-center justify-center gap-2">
-                                    <button
-                                        className="rounded-xl bg-primary px-4 py-2 text-primary-foreground shadow hover:brightness-110"
-                                        onClick={() => setShowAuth(true)}
-                                    >
-                                        Log in
-                                    </button>
-                                    <a
-                                        href="/"
-                                        className="rounded-xl border px-4 py-2 hover:bg-muted"
-                                    >
-                                        Go to the main page
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </section>
-            </div>
+                   {/* Guest overlay (and modal mount) */}
+                   {!loading && !isAuthenticated && (
+                       <div className="absolute inset-0 z-20 grid place-items-center bg-background/70 backdrop-blur-sm rounded-2xl">
+                           <div className="max-w-sm w-[92%] rounded-2xl border bg-background p-6 text-center shadow-xl">
+                               <h3 className="text-lg font-semibold">Sign in to join the chat</h3>
+                               <p className="mt-1 text-sm text-muted-foreground">
+                                   Create an account or log in to send messages.
+                               </p>
+                               <div className="mt-4 flex items-center justify-center gap-2">
+                                   <button
+                                       className="rounded-xl bg-primary px-4 py-2 text-primary-foreground shadow hover:brightness-110"
+                                       onClick={() => setShowAuth(true)}
+                                   >
+                                       Log in
+                                   </button>
+                                   <a
+                                       href="/"
+                                       className="rounded-xl border px-4 py-2 hover:bg-muted"
+                                   >
+                                       Go to the main page
+                                   </a>
+                               </div>
+                           </div>
+                       </div>
+                   )}
+               </section>
+           </div>
 
 
            {/* Auth modal */}
@@ -663,42 +646,43 @@ export default function GlobalChat() {
 
 /** --------- bubble --------- */
 function MessageBubble({ msg, isMe }) {
-    const who = labelFor(msg.sender);
-    const when = formatTime(msg.createdAt);
+   const who = labelFor(msg.sender);
+   const when = formatTime(msg.createdAt);
 
 
-    if (isMe) {
-        return (
-            <div className="flex w-full justify-end">
-                <div className="max-w-[80%]">
-                    <div className="mb-1 text-right text-[11px] text-muted-foreground">
-                        You • {when}
-                    </div>
-                    <div className="rounded-2xl rounded-br-sm bg-gradient-to-br from-indigo-600 to-fuchsia-600 px-4 py-2 text-white shadow-md">
-                        {msg.text}
-                    </div>
-                </div>
-            </div>
-        );
-    }
+   if (isMe) {
+       return (
+           <div className="flex w-full justify-end">
+               <div className="max-w-[80%]">
+                   <div className="mb-1 text-right text-[11px] text-muted-foreground">
+                       You • {when}
+                   </div>
+                   <div className="rounded-2xl rounded-br-sm bg-gradient-to-br from-indigo-600 to-fuchsia-600 px-4 py-2 text-white shadow-md">
+                       {msg.text}
+                   </div>
+               </div>
+           </div>
+       );
+   }
 
 
-    return (
-        <div className="flex w-full items-start gap-2">
-            <div className="mt-5 flex h-8 w-8 shrink-0 select-none items-center justify-center rounded-full bg-muted font-semibold text-foreground/70">
-                {initials(who)}
-            </div>
-            <div className="max-w-[80%]">
-                <div className="mb-1 text-[11px] text-muted-foreground">
-                    {who} • {when}
-                </div>
-                <div className="rounded-2xl rounded-tl-sm border border-border/60 bg-background px-4 py-2 shadow-sm">
-                    {msg.text}
-                </div>
-            </div>
-        </div>
-    );
+   return (
+       <div className="flex w-full items-start gap-2">
+           <div className="mt-5 flex h-8 w-8 shrink-0 select-none items-center justify-center rounded-full bg-muted font-semibold text-foreground/70">
+               {initials(who)}
+           </div>
+           <div className="max-w-[80%]">
+               <div className="mb-1 text-[11px] text-muted-foreground">
+                   {who} • {when}
+               </div>
+               <div className="rounded-2xl rounded-tl-sm border border-border/60 bg-background px-4 py-2 shadow-sm">
+                   {msg.text}
+               </div>
+           </div>
+       </div>
+   );
 }
+
 
 /** ----- tiny emoji set ----- */
 const COMMON_EMOJIS = [

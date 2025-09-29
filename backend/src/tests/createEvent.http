@@ -23,8 +23,8 @@ Authorization: Bearer {{TOKEN}}
 Content-Type: application/json
 
 {
-  "slug": "big-apple-2026-full",
-  "title": "Big Apple 2026",
+  "slug": "Testing Update",
+  "title": "update2026",
   "subtitle": "Modern event stack for builders",
   "description": "Hands-on sessions, networking, and live demos across the modern event stack.",
   "coverImage": "https://res.cloudinary.com/demo/image/upload/v1700000000/sample-cover.jpg",
@@ -124,12 +124,12 @@ Content-Type: application/json
 ###
 
 # Read back by slug (public route)
-GET {{BASE}}/api/events/big-apple-2026-full
+GET {{BASE}}/api/events/Testing Update
 
 ###
 
 # Read by ID (after you copy the _id from the create response)
-@EVENT_ID=68cd05b0798a41cc6c6a156e
+@EVENT_ID=68d99173a45b2fb551075287
 
 GET {{BASE}}/api/events/{{EVENT_ID}}
 
@@ -140,11 +140,11 @@ Authorization: Bearer {{TOKEN}}
 Content-Type: application/json
 
 {
-  "title": "Big Apple 2026 — Spring Edition",
+  "title": "Testing Update — Spring Edition",
   "subtitle": "Modern event stack for builders (updated)",
   "coverImage": "https://res.cloudinary.com/demo/image/upload/v1700000000/sample-cover-updated.jpg",
   "venue": {
-    "city": "Brooklyn"
+    "city": "Bremen"
   }
 }
 
