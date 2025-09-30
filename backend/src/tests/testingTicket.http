@@ -1,5 +1,5 @@
 # Variables (replace as needed)
-@api_base = http://localhost:5000/api
+@api_base = http://localhost:5050/api
 @event_id = 68c410d3209c849a19477914
 @ticket_id = 68c411bf209c849a1947791b
 @token = REPLACE_WITH_BEARER_TOKEN
@@ -8,7 +8,7 @@
 
 
 ### Login
-POST http://localhost:5000/api/users/login
+POST http://localhost:5050/api/users/login
 Content-Type: application/json
 
 {

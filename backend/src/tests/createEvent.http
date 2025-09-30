@@ -1,4 +1,4 @@
-@BASE=http://localhost:5000
+@BASE=http://localhost:5050
 @TOKEN=token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2OGMxNDEyYjRmZDlhZGEwYTFhZWQ5NDIiLCJpYXQiOjE3NTgyNjY0ODIsImV4cCI6MTc1ODg3MTI4Mn0.4PGN8s9nByzx710N_rjTF1PkR3TTqOVBmEes-mCcV4U; Max-Age=86400; Path=/; Expires=Sat, 20 Sep 2025 07:21:22 GMT; HttpOnly; SameSite=Strict
 
 
@@ -8,7 +8,7 @@
 
 
 ### Login
-POST http://localhost:5000/api/users/login
+POST http://localhost:5050/api/users/login
 Content-Type: application/json
 
 {
