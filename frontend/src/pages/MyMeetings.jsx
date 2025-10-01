@@ -1,18 +1,61 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
+import { User as UserIcon, Loader2, Calendar, Clock, Video, MapPin, Check, X, Ban, Filter, MessageSquare } from "lucide-react";
+
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/context/AuthContext";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import {
-    Loader2, Calendar, Clock, Video, MapPin, Check, X, Ban, Filter, MessageSquare
-} from "lucide-react";
-import { useAuth } from "@/context/AuthContext";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
 import ScheduleMeetingModal from "@/components/meetings/ScheduleMeetingModal";
-import { listMeetings, updateMeetingStatus, sendMeetingNote } from "@/api/meetingsApi";
 import MeetingNoteDialog from "@/components/meetings/MeetingNoteDialog";
 import DeclineMeetingModal from "@/components/meetings/DeclineMeetingModal";
+
+import { listMeetings, updateMeetingStatus, sendMeetingNote } from "@/api/meetingsApi";
+
+/* -------------------------- helpers -------------------------- */
+
+const str = (v) => (v == null ? "" : String(v));
+const idOf = (objOrId) => {
+    if (!objOrId) return "";
+    if (typeof objOrId === "object") return str(objOrId._id ?? objOrId.id ?? "");
+    return str(objOrId);
+};
+const myIdFromAuth = (user) => str(user?._id || "");
+
+const otherParticipantId = (m, myId) => {
+    const requesterId = idOf(m.requesterId ?? m.requester?._id);
+    const inviteeId = idOf(m.inviteeId ?? m.invitee?._id);
+    return requesterId === myId ? inviteeId : requesterId;
+};
+
+const counterpartOf = (m, myId) => {
+    const requester = m.requester || m.requesterUser || {};
+    const invitee = m.invitee || m.inviteeUser || {};
+
+    const amRequester = idOf(m.requesterId ?? requester._id) === myId;
+    const other = amRequester ? invitee : requester;
+
+    const id = idOf(other._id || (amRequester ? m.inviteeId : m.requesterId));
+    const explicitName =
+        other.fullName ||
+        other.name ||
+        other.username ||
+        m.counterpartName ||
+        (amRequester ? m.inviteeName : m.requesterName) ||
+        null;
+
+    return {
+        id: id || null,
+        shortId: id ? id.slice(-6) : null,
+        name: explicitName || null,
+        hasRealName: Boolean(explicitName),
+        avatar: other.avatarUrl || other.photo || other.avatar || null,
+    };
+};
 
 function fmtRange(startAt, endAt) {
     const s = new Date(startAt);
@@ -26,10 +69,13 @@ function fmtRange(startAt, endAt) {
         : `${date} ${t1} → ${e.toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`;
 }
 
+/* -------------------------- component -------------------------- */
+
 export default function MyMeetings() {
     const { eventId } = useParams();
     const { toast } = useToast();
     const { user } = useAuth();
+    const myId = myIdFromAuth(user);
 
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -42,13 +88,18 @@ export default function MyMeetings() {
     // list filters
     const [viewMode, setViewMode] = useState("upcoming");
 
-    // schedule modal
-    const [modalOpen, setModalOpen] = useState(false);
+    // schedule modal (used for “propose new time” or CTA)
+    const [scheduleOpen, setScheduleOpen] = useState(false);
     const [presetInviteeId, setPresetInviteeId] = useState(null);
 
-    // decline modal (single instance for the whole page)
+    // decline modal (single instance)
     const [declineOpen, setDeclineOpen] = useState(false);
     const [declineId, setDeclineId] = useState(null);
+
+    function openDecline(m) {
+        setDeclineId(m._id);
+        setDeclineOpen(true);
+    }
 
     async function load(signal) {
         setLoading(true);
@@ -57,13 +108,14 @@ export default function MyMeetings() {
             const { meetings } = await listMeetings(params, { signal });
             setItems(meetings || []);
         } catch (err) {
-            if (err?.code === "ERR_CANCELED") return;
-            console.error(err);
-            toast({
-                title: "Could not load meetings",
-                description: "Showing what we can.",
-                variant: "destructive",
-            });
+            if (err?.code !== "ERR_CANCELED") {
+                console.error(err);
+                toast({
+                    title: "Could not load meetings",
+                    description: "Showing what we can.",
+                    variant: "destructive",
+                });
+            }
         } finally {
             setLoading(false);
         }
@@ -119,11 +171,6 @@ export default function MyMeetings() {
         toast({ title: "Updated", description: `Status: ${updated.status}` });
     }
 
-    function getCounterpartId(m) {
-        const me = String(user?._id || "");
-        return String(m.inviteeId) === me ? String(m.requesterId) : String(m.inviteeId);
-    }
-
     async function refresh() {
         try {
             const params = { role: "mine", ...(eventId ? { eventId } : {}) };
@@ -148,23 +195,18 @@ export default function MyMeetings() {
         }
     }
 
-    function openDecline(m) {
-        setDeclineId(m._id);
-        setDeclineOpen(true);
-    }
-
     function proposeNewTime(m) {
-        const otherId = getCounterpartId(m);
+        const otherId = otherParticipantId(m, myId);
         if (!otherId) return;
         setPresetInviteeId(otherId);
-        setModalOpen(true);
+        setScheduleOpen(true);
     }
 
     async function removeMeeting(m) {
         setActingId(m._id);
         try {
             await updateMeetingStatus(m._id, "cancelled");
-            setItems((prev) => prev.filter((x) => x._id !== m._id));
+            setItems((prev) => prev.filter((x) => x._id !== m._id)); // UI updates immediately
             toast({ title: "Removed", description: "The meeting was removed from your list." });
         } catch (e) {
             showError(e);
@@ -190,18 +232,24 @@ export default function MyMeetings() {
         }
     }
 
+    // Stats (Total ignores cancelled, so it matches the visible list)
     const counts = useMemo(() => {
         const now = new Date();
-        const active = items.filter((m) => m.status === "pending" || m.status === "accepted");
-        const total = items.length;
+        const base = items.filter((m) => m.status !== "cancelled");
+        const active = base.filter((m) => m.status === "pending" || m.status === "accepted");
+
+        const total = base.length;
         const upcoming = active.filter((m) => new Date(m.endAt) >= now).length;
+
         const isVirtual = (m) => {
             const loc = (m.location || "").toLowerCase();
             const place = m.place || "";
             return loc === "online" || /(zoom|meet|teams|skype|webex|http:\/\/|https:\/\/)/i.test(place);
         };
+
         const virtual = active.filter(isVirtual).length;
         const inPerson = active.filter((m) => (m.location || "").toLowerCase() === "in-person").length;
+
         return { total, upcoming, virtual, inPerson };
     }, [items]);
 
@@ -217,15 +265,13 @@ export default function MyMeetings() {
         return base.filter((m) => new Date(m.endAt) >= now);
     }, [items, viewMode]);
 
-    const myId = String(user?._id || "");
-
     return (
         <div className="min-h-screen flex flex-col">
             <div className="space-y-6 flex-1">
                 {/* Header + CTA */}
                 <div className="flex items-baseline justify-between">
                     <h1 className="text-2xl font-semibold">My Meetings</h1>
-                    <Button className="rounded-xl px-3" onClick={() => setModalOpen(true)}>
+                    <Button className="rounded-xl px-3" onClick={() => setScheduleOpen(true)}>
                         Schedule New Meeting
                     </Button>
                 </div>
@@ -268,7 +314,7 @@ export default function MyMeetings() {
                         <p className="text-muted-foreground mb-4">
                             {viewMode === "upcoming" ? "You don't have any upcoming meetings." : "No meetings match your current filter."}
                         </p>
-                        <Button className="bg-gradient-to-r from-primary to-secondary" onClick={() => setModalOpen(true)}>
+                        <Button className="bg-gradient-to-r from-primary to-secondary" onClick={() => setScheduleOpen(true)}>
                             Schedule Your First Meeting
                         </Button>
                     </div>
@@ -278,9 +324,10 @@ export default function MyMeetings() {
                             .slice()
                             .sort((a, b) => new Date(a.startAt) - new Date(b.startAt))
                             .map((m) => {
-                                const isInvitee = String(m.inviteeId) === myId;
-                                const isRequester = String(m.requesterId) === myId;
+                                const isInvitee = idOf(m.inviteeId) === myId;
+                                const isRequester = idOf(m.requesterId) === myId;
                                 const isPending = m.status === "pending";
+                                const counterpart = counterpartOf(m, myId);
 
                                 return (
                                     <Card
@@ -300,10 +347,49 @@ export default function MyMeetings() {
                                                     {m.place ? <> • {m.place}</> : null}
                                                 </div>
 
-                                                {String(m.inviteeId) === myId && m.status === "declined" && (
+                                                <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                                                    {counterpart.avatar ? (
+                                                        <img
+                                                            src={counterpart.avatar}
+                                                            alt={counterpart.name || "User"}
+                                                            className="h-5 w-5 rounded-full border"
+                                                            loading="lazy"
+                                                        />
+                                                    ) : (
+                                                        <div className="h-5 w-5 rounded-full border grid place-items-center">
+                                                            <UserIcon className="h-3.5 w-3.5 opacity-70" />
+                                                        </div>
+                                                    )}
+
+                                                    {(counterpart.hasRealName || counterpart.shortId) && (
+                                                        <span className="flex items-center gap-1">
+                                                            With:
+                                                            {counterpart.hasRealName ? (
+                                                                <span className="font-medium text-foreground">{counterpart.name}</span>
+                                                            ) : (
+                                                                <>
+                                                                    <span className="font-medium text-foreground">User</span>
+                                                                    {counterpart.shortId && (
+                                                                        <span
+                                                                            title={counterpart.id ? `User ID: ${counterpart.id}` : undefined}
+                                                                            className="ml-1 rounded-md bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
+                                                                        >
+                                                                            {counterpart.shortId}
+                                                                        </span>
+                                                                    )}
+                                                                </>
+                                                            )}
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                {isInvitee && m.status === "declined" && (
                                                     <div className="mt-1">
                                                         <Badge variant="outline" className="text-amber-700 border-amber-300 bg-amber-50">
-                                                            You declined{m.updatedAt ? ` • ${new Date(m.updatedAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}` : ""}
+                                                            You declined
+                                                            {m.updatedAt
+                                                                ? ` • ${new Date(m.updatedAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`
+                                                                : ""}
                                                         </Badge>
                                                         <span className="ml-2 text-xs text-muted-foreground">
                                                             The requester has been notified.
@@ -349,8 +435,7 @@ export default function MyMeetings() {
                                                     </>
                                                 )}
 
-                                                {/* After you’ve declined, surface a proactive next step */}
-                                                {String(m.inviteeId) === myId && m.status === "declined" && (
+                                                {isInvitee && m.status === "declined" && (
                                                     <Button size="sm" onClick={() => proposeNewTime(m)}>
                                                         <Calendar className="mr-1 h-4 w-4" /> Propose New Time
                                                     </Button>
@@ -389,12 +474,16 @@ export default function MyMeetings() {
                 meetingId={declineId}
                 onClose={() => { setDeclineOpen(false); setDeclineId(null); }}
                 onDone={(meeting) => mutateLocal?.(meeting)}
+                onPropose={() => {
+                    const m = items.find((x) => x._id === declineId);
+                    if (m) proposeNewTime(m);
+                }}
             />
 
             {/* Schedule modal */}
             <ScheduleMeetingModal
-                isOpen={modalOpen}
-                onClose={() => setModalOpen(false)}
+                isOpen={scheduleOpen}
+                onClose={() => setScheduleOpen(false)}
                 eventId={eventId || undefined}
                 presetInviteeId={presetInviteeId || null}
             />
