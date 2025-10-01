@@ -9,7 +9,7 @@ import {
   getMatchSuggestions,
   searchEventAttendees,
   getGlobalMatches,
-} from "../controllers/matches.controller.js"; // ✅ Only this one
+} from "../controllers/matches.controller.js";
 
 const router = express.Router();
 

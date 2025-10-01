@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
-import { listMeetings, updateMeetingStatus, sendMeetingNote } from "@/api/meetingsApi";
-import MeetingNoteDialog from "@/components/meetings/MeetingNoteDialog";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Calendar, Clock, Video, MapPin, Check, X, Ban, Filter, MessageSquare } from "lucide-react";
+import {
+    Loader2, Calendar, Clock, Video, MapPin, Check, X, Ban, Filter, MessageSquare
+} from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import ScheduleMeetingModal from "@/components/meetings/ScheduleMeetingModal";
+import { listMeetings, updateMeetingStatus, sendMeetingNote } from "@/api/meetingsApi";
+import MeetingNoteDialog from "@/components/meetings/MeetingNoteDialog";
+import DeclineMeetingModal from "@/components/meetings/DeclineMeetingModal";
 
 function fmtRange(startAt, endAt) {
     const s = new Date(startAt);
@@ -18,7 +21,9 @@ function fmtRange(startAt, endAt) {
     const date = s.toLocaleDateString([], { dateStyle: "medium" });
     const t1 = s.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     const t2 = e.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    return sameDay ? `${date} • ${t1} – ${t2}` : `${date} ${t1} → ${e.toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`;
+    return sameDay
+        ? `${date} • ${t1} – ${t2}`
+        : `${date} ${t1} → ${e.toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`;
 }
 
 export default function MyMeetings() {
@@ -29,13 +34,21 @@ export default function MyMeetings() {
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [actingId, setActingId] = useState(null);
+
+    // quick note dialog
     const [noteForId, setNoteForId] = useState(null);
     const [noteSending, setNoteSending] = useState(false);
+
+    // list filters
     const [viewMode, setViewMode] = useState("upcoming");
 
-    // ⬇️ NEW: control the schedule modal here
+    // schedule modal
     const [modalOpen, setModalOpen] = useState(false);
-    const [presetInviteeId] = useState(null); // keep null on MyMeetings; user picks in modal
+    const [presetInviteeId, setPresetInviteeId] = useState(null);
+
+    // decline modal (single instance for the whole page)
+    const [declineOpen, setDeclineOpen] = useState(false);
+    const [declineId, setDeclineId] = useState(null);
 
     async function load(signal) {
         setLoading(true);
@@ -44,9 +57,13 @@ export default function MyMeetings() {
             const { meetings } = await listMeetings(params, { signal });
             setItems(meetings || []);
         } catch (err) {
-            if (err?.code === "ERR_CANCELED") return; // unmount abort
+            if (err?.code === "ERR_CANCELED") return;
             console.error(err);
-            toast({ title: "Could not load meetings", description: "Showing what we can.", variant: "destructive" });
+            toast({
+                title: "Could not load meetings",
+                description: "Showing what we can.",
+                variant: "destructive",
+            });
         } finally {
             setLoading(false);
         }
@@ -97,15 +114,19 @@ export default function MyMeetings() {
     }
 
     function mutateLocal(updated) {
-        if (!updated || !updated._id) return;
+        if (!updated?._id) return;
         setItems((prev) => prev.map((x) => (x._id === updated._id ? updated : x)));
         toast({ title: "Updated", description: `Status: ${updated.status}` });
     }
 
+    function getCounterpartId(m) {
+        const me = String(user?._id || "");
+        return String(m.inviteeId) === me ? String(m.requesterId) : String(m.inviteeId);
+    }
+
     async function refresh() {
         try {
-            const params = { role: "mine" };
-            if (eventId) params.eventId = eventId;
+            const params = { role: "mine", ...(eventId ? { eventId } : {}) };
             const { meetings } = await listMeetings(params);
             setItems(meetings || []);
         } catch (err) {
@@ -127,18 +148,16 @@ export default function MyMeetings() {
         }
     }
 
-    async function declineMeeting(m) {
-        const note = window.prompt("Add a short note (optional):") || "";
-        setActingId(m._id);
-        try {
-            const res = await updateMeetingStatus(m._id, "declined", note);
-            const meeting = res?.meeting;
-            if (meeting) mutateLocal(meeting);
-        } catch (e) {
-            showError(e);
-        } finally {
-            setActingId(null);
-        }
+    function openDecline(m) {
+        setDeclineId(m._id);
+        setDeclineOpen(true);
+    }
+
+    function proposeNewTime(m) {
+        const otherId = getCounterpartId(m);
+        if (!otherId) return;
+        setPresetInviteeId(otherId);
+        setModalOpen(true);
     }
 
     async function removeMeeting(m) {
@@ -171,12 +190,10 @@ export default function MyMeetings() {
         }
     }
 
-    // const scheduleTo = eventId ? `/events/${eventId}/people` : `/people`; // ❌ not needed anymore
-
     const counts = useMemo(() => {
         const now = new Date();
         const active = items.filter((m) => m.status === "pending" || m.status === "accepted");
-        const total = items.length; // total of all meetings (or use active.length if you only want active)
+        const total = items.length;
         const upcoming = active.filter((m) => new Date(m.endAt) >= now).length;
         const isVirtual = (m) => {
             const loc = (m.location || "").toLowerCase();
@@ -208,8 +225,6 @@ export default function MyMeetings() {
                 {/* Header + CTA */}
                 <div className="flex items-baseline justify-between">
                     <h1 className="text-2xl font-semibold">My Meetings</h1>
-
-                    {/* ⬇️ changed: open modal instead of navigating */}
                     <Button className="rounded-xl px-3" onClick={() => setModalOpen(true)}>
                         Schedule New Meeting
                     </Button>
@@ -240,8 +255,6 @@ export default function MyMeetings() {
                 </div>
 
                 {/* List */}
-                {/* ... (no changes below in list rendering/actions) ... */}
-
                 {loading ? (
                     <div className="mt-10 flex items-center justify-center text-muted-foreground">
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading meetings…
@@ -270,7 +283,14 @@ export default function MyMeetings() {
                                 const isPending = m.status === "pending";
 
                                 return (
-                                    <Card key={m._id}>
+                                    <Card
+                                        key={m._id}
+                                        className={
+                                            m.status === "declined"
+                                                ? "border-amber-300/60 shadow-[inset_4px_0_0_0_rgba(245,158,11,0.6)]"
+                                                : ""
+                                        }
+                                    >
                                         <CardContent className="p-4 flex items-center justify-between gap-4">
                                             <div className="min-w-0">
                                                 <div className="font-medium">{fmtRange(m.startAt, m.endAt)}</div>
@@ -279,6 +299,18 @@ export default function MyMeetings() {
                                                     {m.location ? <> • Location: {m.location}</> : null}
                                                     {m.place ? <> • {m.place}</> : null}
                                                 </div>
+
+                                                {String(m.inviteeId) === myId && m.status === "declined" && (
+                                                    <div className="mt-1">
+                                                        <Badge variant="outline" className="text-amber-700 border-amber-300 bg-amber-50">
+                                                            You declined{m.updatedAt ? ` • ${new Date(m.updatedAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}` : ""}
+                                                        </Badge>
+                                                        <span className="ml-2 text-xs text-muted-foreground">
+                                                            The requester has been notified.
+                                                        </span>
+                                                    </div>
+                                                )}
+
                                                 {m.message && <div className="mt-1 text-sm">{m.message}</div>}
                                                 {m.responseNote && (
                                                     <div className="mt-1 text-xs text-muted-foreground">Note: {m.responseNote}</div>
@@ -299,13 +331,29 @@ export default function MyMeetings() {
                                                 {isInvitee && isPending && (
                                                     <>
                                                         <Button size="sm" onClick={() => acceptMeeting(m)} disabled={actingId === m._id}>
-                                                            {actingId === m._id ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Check className="mr-1 h-4 w-4" />}
+                                                            {actingId === m._id ? (
+                                                                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                                                            ) : (
+                                                                <Check className="mr-1 h-4 w-4" />
+                                                            )}
                                                             Accept
                                                         </Button>
-                                                        <Button size="sm" variant="outline" onClick={() => declineMeeting(m)} disabled={actingId === m._id}>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() => openDecline(m)}
+                                                            disabled={actingId === m._id}
+                                                        >
                                                             <X className="mr-1 h-4 w-4" /> Decline
                                                         </Button>
                                                     </>
+                                                )}
+
+                                                {/* After you’ve declined, surface a proactive next step */}
+                                                {String(m.inviteeId) === myId && m.status === "declined" && (
+                                                    <Button size="sm" onClick={() => proposeNewTime(m)}>
+                                                        <Calendar className="mr-1 h-4 w-4" /> Propose New Time
+                                                    </Button>
                                                 )}
 
                                                 {(isRequester || isInvitee) && (
@@ -327,19 +375,28 @@ export default function MyMeetings() {
                 )}
             </div>
 
-            {/* Single dialog instance (notes)*/}
+            {/* Quick message dialog */}
             <MeetingNoteDialog
                 open={Boolean(noteForId)}
                 onClose={() => setNoteForId(null)}
                 onSend={handleSendNote}
                 sending={noteSending}
             />
+
+            {/* Decline modal – single instance */}
+            <DeclineMeetingModal
+                open={declineOpen}
+                meetingId={declineId}
+                onClose={() => { setDeclineOpen(false); setDeclineId(null); }}
+                onDone={(meeting) => mutateLocal?.(meeting)}
+            />
+
             {/* Schedule modal */}
             <ScheduleMeetingModal
                 isOpen={modalOpen}
                 onClose={() => setModalOpen(false)}
                 eventId={eventId || undefined}
-                presetInviteeId={null}
+                presetInviteeId={presetInviteeId || null}
             />
         </div>
     );

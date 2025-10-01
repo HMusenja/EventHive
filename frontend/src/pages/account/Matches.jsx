@@ -20,7 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
 import ScheduleMeetingModal from "@/components/meetings/ScheduleMeetingModal";
-// data sources
+import RequestMeetingModal from "@/components/meetings/RequestMeetingModal";
 import { fetchEventAttendees } from "@/api/meetingsApi";
 import { fetchGlobalMatches as getMatchSuggestions } from "@/api/matchApi";
 
@@ -41,6 +41,17 @@ export default function Matches() {
   // modal state
   const [isScheduleOpen, setScheduleOpen] = useState(false);
   const [presetInviteeId, setPresetInviteeId] = useState(null);
+
+  // counts of requests you've sent this session, keyed by inviteeId
+  const [sentCounts, setSentCounts] = useState({});
+
+  // when a meeting request is created successfully
+  function handleMeetingRequested(inviteeId) {
+    setSentCounts(prev => ({
+      ...prev,
+      [inviteeId]: (prev[inviteeId] || 0) + 1,
+    }));
+  }
 
   // ---- Load data (event attendees OR global matches) ----
   useEffect(() => {
@@ -248,6 +259,7 @@ export default function Matches() {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {filtered.map((match) => {
             const inviteeId = getInviteeId(match);
+            const sent = sentCounts[inviteeId] || 0;
 
             // allow schedule if we have an id and (in event mode the id looks like ObjectId)
             const idLooksOk = inviteeId && (!eventId || HEX24.test(inviteeId));
@@ -288,6 +300,11 @@ export default function Matches() {
                       <Badge className={`${getStatusColor(match.status)} text-white border-0`}>
                         {match.status}
                       </Badge>
+                      {sent > 0 && (
+                        <Badge variant="outline" className="text-xs">
+                          requested{sent > 1 ? ` ×${sent}` : ""}
+                        </Badge>
+                      )}
                       <div className={`text-sm font-semibold ${getMatchScoreColor(match.matchScore)}`}>
                         {match.matchScore}% match
                       </div>
@@ -341,16 +358,23 @@ export default function Matches() {
                           ? openSchedule(inviteeId)
                           : toast({
                             title: "Unavailable for scheduling",
-                            description:
-                              "This profile can’t be scheduled right now.",
+                            description: "This profile can’t be scheduled right now.",
                             variant: "destructive",
                           })
                       }
                       disabled={!canSchedule}
-                      title={canSchedule ? "Schedule a meeting" : "Unavailable for scheduling"}
+                      title={
+                        canSchedule
+                          ? (sent > 0 ? `Requested${sent > 1 ? ` ×${sent}` : ""}` : "Schedule a meeting")
+                          : "Unavailable for scheduling"
+                      }
                     >
                       <Calendar className="h-4 w-4 mr-2" />
-                      Schedule
+                      {sent > 0 ? (
+                        <>Requested{sent > 1 ? ` (${sent})` : ""}</>
+                      ) : (
+                        <>Schedule</>
+                      )}
                     </Button>
                   </div>
                 </CardContent>
@@ -372,12 +396,24 @@ export default function Matches() {
         </div>
       )}
 
-      {/* ✅ OLD POPUP MODAL (works global or event-scoped) */}
+      {/* ✅ OLD POPUP MODAL (works global or event-scoped)
       <ScheduleMeetingModal
         isOpen={isScheduleOpen}
         onClose={() => setScheduleOpen(false)}
         presetInviteeId={presetInviteeId}
         eventId={eventId || undefined}
+      />*/}
+      <RequestMeetingModal
+        open={isScheduleOpen}
+        onClose={() => setScheduleOpen(false)}
+        hostId={presetInviteeId}
+        eventId={eventId}
+
+        presetInviteeId={presetInviteeId}
+        sentCount={sentCounts[presetInviteeId] || 0}
+        onCreated={(_meeting, idFromModal) => {
+          handleMeetingRequested(String(idFromModal || presetInviteeId));
+        }}
       />
     </div>
   );

@@ -308,13 +308,25 @@ export const getGlobalMatches = async (req, res, next) => {
     const userId = req.user?._id;
     if (!userId) return next(createError(401, "Not authenticated"));
 
-    const user = await User.findById(userId).select("interests").lean();
-    const myInterests = normalizeInterests(user?.interests || []);
+    // read current user's interests (normalized)
+    const me = await User.findById(userId).select("interests").lean();
+    const myInterests = Array.isArray(me?.interests)
+      ? me.interests.map((t) =>
+        String(t ?? "")
+          .toLowerCase()
+          .trim()
+      ).filter(Boolean)
+      : [];
 
+    // query overrides
     const { interests = "", limit = 20 } = req.query;
-    const queryTags = normalizeInterests(interests.split(",")) || myInterests;
+    const queryTags = String(interests || "")
+      .split(",")
+      .map((t) => t.trim().toLowerCase())
+      .filter(Boolean);
 
-    if (!queryTags.length) return res.json({ matches: [] });
+    const tags = queryTags.length ? queryTags : myInterests;
+    if (!tags.length) return res.json({ matches: [] });
 
     const safeLimit = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
 
@@ -322,9 +334,10 @@ export const getGlobalMatches = async (req, res, next) => {
       {
         $match: {
           _id: { $ne: new mongoose.Types.ObjectId(userId) },
-          interests: { $in: queryTags },
+          interests: { $exists: true }, // only users with the field
         },
       },
+      // Make every interest a lowercased, trimmed string, safely.
       {
         $addFields: {
           lowerInterests: {
@@ -336,10 +349,14 @@ export const getGlobalMatches = async (req, res, next) => {
                   in: {
                     $trim: {
                       input: {
-                        $regexReplace: {
-                          input: { $toLower: "$$t" },
-                          regex: /\s+/,
-                          replacement: " ",
+                        $toLower: {
+                          // $convert won't throw; bad types -> ""
+                          $convert: {
+                            input: "$$t",
+                            to: "string",
+                            onError: "",
+                            onNull: "",
+                          },
                         },
                       },
                     },
@@ -351,15 +368,8 @@ export const getGlobalMatches = async (req, res, next) => {
           },
         },
       },
-      {
-        $addFields: {
-          overlap: {
-            $size: {
-              $setIntersection: ["$lowerInterests", queryTags],
-            },
-          },
-        },
-      },
+      { $addFields: { overlap: { $size: { $setIntersection: ["$lowerInterests", tags] } } } },
+      { $match: { overlap: { $gt: 0 } } },
       { $sort: { overlap: -1, lastLoginAt: -1 } },
       { $limit: safeLimit },
       {
@@ -376,6 +386,8 @@ export const getGlobalMatches = async (req, res, next) => {
 
     res.json({ matches });
   } catch (err) {
+    // Log the real cause so you can see it in the server console
+    console.error("[getGlobalMatches] failed:", err?.message, err?.stack);
     next(err);
   }
 };

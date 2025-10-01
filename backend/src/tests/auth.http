@@ -1,5 +1,5 @@
 ### Register
-POST http://localhost:5000/api/users/register
+POST http://localhost:5050/api/users/register
 Content-Type: application/json
 
 {
@@ -11,7 +11,7 @@ Content-Type: application/json
 }
 
 ### Login
-POST http://localhost:5000/api/users/login
+POST http://localhost:5050/api/users/login
 Content-Type: application/json
 
 {
@@ -20,14 +20,14 @@ Content-Type: application/json
 }
 
 ### Me (cookie must be sent by client; Postman: enable cookie jar)
-GET http://localhost:5000/api/users/me
+GET http://localhost:5050/api/users/me
 
 
 ### Me unified
-GET http://localhost:5000/api/users/me/profile
+GET http://localhost:5050/api/users/me/profile
 
 ### Membership summary
-GET http://localhost:5000/api/users/me/summary
+GET http://localhost:5050/api/users/me/summary
 
 ### Logout
-POST http://localhost:5000/api/users/logout
+POST http://localhost:5050/api/users/logout
