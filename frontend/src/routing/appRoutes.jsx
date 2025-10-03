@@ -5,15 +5,12 @@ import Register from "@/pages/Register";
 import EventDetail from "@/pages/EventDetail";
 import EventList from "@/pages/EventList";
 import EditEventPage from "@/pages/events/EditEventPage";
-
-
 import Dashboard from "@/pages/dashboard/Dashboard";
 import OrganizerLayout from "@/pages/OrganizerLayout";
 import Sales from "@/pages/dashboard/organizer/Sales";
 import Events from "@/pages/dashboard/organizer/Events";
 import Exports from "@/pages/dashboard/organizer/Exports";
 import Analytics from "@/pages/dashboard/organizer/Analytics";
-
 import RequestMeeting from "@/pages/RequestMeeting";
 import MyMeetings from "@/pages/MyMeetings";
 import AccountLayout from "@/pages/AccountLayout";
@@ -51,7 +48,7 @@ export default function AppRoutes() {
 
 
 
-       {/* <Route path="/events/:id/tickets" element={<Tickets />} /> */}
+        {/* <Route path="/events/:id/tickets" element={<Tickets />} /> */}
 
         <Route path="/tickets" element={<Tickets />} />
         <Route path="/tickets/success" element={<TicketSuccess />} />
@@ -71,13 +68,13 @@ export default function AppRoutes() {
         {/* Event detail by slug (preferred) */}
         <Route path="/events/:slug" element={<EventDetail />} />
 
-         <Route path="/dashboard/organizer" element={<OrganizerLayout />}>
-            <Route index element={<Dashboard />} />
-            <Route path="events" element={<Events />} />
-            <Route path="sales" element={<Sales />} />
-            <Route path="analytics" element={<Analytics />} />
-            <Route path="exports" element={<Exports />} /> 
-          </Route>
+        <Route path="/dashboard/organizer" element={<OrganizerLayout />}>
+          <Route index element={<Dashboard />} />
+          <Route path="events" element={<Events />} />
+          <Route path="sales" element={<Sales />} />
+          <Route path="analytics" element={<Analytics />} />
+          <Route path="exports" element={<Exports />} />
+        </Route>
 
         {/* Onboarding + Tickets by slug */}
         <Route path="/events/:slug/onboarding" element={<EventOnboardingPage />} />
@@ -114,7 +111,7 @@ export default function AppRoutes() {
         <Route path="profile" element={<Profile />} />
         <Route path="profile/edit" element={<EditProfilePage />} />
         <Route path="event/create" element={<CreateEventPage />} />
-         <Route path="event/:id/edit" element={<EditEventPage />} />
+        <Route path="event/:id/edit" element={<EditEventPage />} />
         <Route path="matches" element={<Matches />} />
         <Route path="meetings" element={<Meetings />} />
         <Route path="my-tickets" element={<MyTickets />} />

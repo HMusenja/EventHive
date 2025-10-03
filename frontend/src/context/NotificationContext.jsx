@@ -1,4 +1,4 @@
-import React, { createContext, useReducer, useContext, useEffect } from "react";
+import React, { createContext, useReducer, useContext, useEffect, useRef } from "react";
 import {
   getNotifications,
   getUnreadCount,
@@ -19,22 +19,29 @@ const initialState = {
 function reducer(state, action) {
   switch (action.type) {
     case "SET_NOTIFICATIONS":
-
       return { ...state, notifications: action.payload, loading: false };
+
     case "SET_UNREAD_COUNT":
-
       return { ...state, unreadCount: action.payload };
-    case "MARK_READ":
 
+    case "MARK_READ": {
+      const wasUnread = state.notifications.some(
+        (n) => n._id === action.payload && !n.readAt
+      );
       return {
         ...state,
         notifications: state.notifications.map((n) =>
-          n._id === action.payload ? { ...n, readAt: new Date().toISOString() } : n
+          n._id === action.payload
+            ? { ...n, readAt: new Date().toISOString() }
+            : n
         ),
-        unreadCount: Math.max(state.unreadCount - 1, 0),
+        unreadCount: wasUnread
+          ? Math.max(state.unreadCount - 1, 0)
+          : state.unreadCount,
       };
-    case "MARK_ALL_READ":
+    }
 
+    case "MARK_ALL_READ":
       return {
         ...state,
         notifications: state.notifications.map((n) => ({
@@ -43,20 +50,34 @@ function reducer(state, action) {
         })),
         unreadCount: 0,
       };
-    case "DELETE_NOTIFICATION":
 
+    case "DELETE_NOTIFICATION": {
+      // 🔧 fix: decrement badge if the deleted one was unread
+      const wasUnread = state.notifications.some(
+        (n) => n._id === action.payload && !n.readAt
+      );
       return {
         ...state,
         notifications: state.notifications.filter((n) => n._id !== action.payload),
+        unreadCount: wasUnread
+          ? Math.max(state.unreadCount - 1, 0)
+          : state.unreadCount,
       };
-    case "CLEAR_READ":
+    }
 
+    case "CLEAR_READ":
+      // read ones are removed; unreadCount unchanged
       return {
         ...state,
         notifications: state.notifications.filter((n) => !n.readAt),
       };
+
     case "SET_LOADING":
       return { ...state, loading: action.payload };
+
+    case "RESET":
+      return { ...state, notifications: [], unreadCount: 0, loading: false };
+
     default:
       return state;
   }
@@ -64,6 +85,10 @@ function reducer(state, action) {
 
 export function NotificationProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState);
+  const resetNotifications = () => dispatch({ type: "RESET" });
+
+  // keep last list reference to avoid unnecessary state writes
+  const lastListRef = useRef(null);
 
   function normalizeListResp(listRes) {
     if (!listRes) return [];
@@ -74,10 +99,28 @@ export function NotificationProvider({ children }) {
     return [];
   }
 
+  function shallowEqualLists(a, b) {
+    if (a === b) return true;
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    // compare by id + readAt + createdAt (enough for our list)
+    for (let i = 0; i < a.length; i++) {
+      const A = a[i], B = b[i];
+      if (
+        A._id !== B._id ||
+        String(A.readAt || "") !== String(B.readAt || "") ||
+        String(A.createdAt || "") !== String(B.createdAt || "")
+      ) return false;
+    }
+    return true;
+  }
+
   async function fetchNotifications() {
     dispatch({ type: "SET_LOADING", payload: true });
     try {
-      const [listRes, countRes] = await Promise.all([getNotifications(), getUnreadCount()]);
+      const [listRes, countRes] = await Promise.all([
+        getNotifications(),
+        getUnreadCount(),
+      ]);
 
       const list = normalizeListResp(listRes);
 
@@ -88,15 +131,28 @@ export function NotificationProvider({ children }) {
         return bb - aa;
       });
 
-      dispatch({ type: "SET_NOTIFICATIONS", payload: list });
+      // avoid redundant re-renders if nothing changed
+      if (!shallowEqualLists(lastListRef.current || [], list)) {
+        dispatch({ type: "SET_NOTIFICATIONS", payload: list });
+        lastListRef.current = list;
+      } else {
+        // if list didn't change, at least stop loading
+        dispatch({ type: "SET_LOADING", payload: false });
+      }
+
       dispatch({
         type: "SET_UNREAD_COUNT",
-        payload: countRes?.data?.count ?? countRes?.data ?? 0,
+        payload: typeof countRes === "number" ? countRes : countRes?.count ?? 0,
       });
     } catch (err) {
-      console.error("[NotificationContext] fetchNotifications failed:", err);
-      dispatch({ type: "SET_NOTIFICATIONS", payload: [] });
-      dispatch({ type: "SET_UNREAD_COUNT", payload: 0 });
+      // If user is not authenticated, clear the list quietly
+      if (err?.response?.status === 401) {
+        dispatch({ type: "RESET" });
+      } else {
+        console.error("[NotificationContext] fetchNotifications failed:", err);
+        dispatch({ type: "SET_NOTIFICATIONS", payload: [] });
+        dispatch({ type: "SET_UNREAD_COUNT", payload: 0 });
+      }
     } finally {
       dispatch({ type: "SET_LOADING", payload: false });
     }
@@ -111,7 +167,6 @@ export function NotificationProvider({ children }) {
       fetchNotifications();
     }
   }
-
   const markNotificationRead = markAsRead;
 
   async function markAllAsRead() {
@@ -155,6 +210,7 @@ export function NotificationProvider({ children }) {
       value={{
         ...state,
         fetchNotifications,
+        resetNotifications,
         markAsRead,
         markNotificationRead,
         markAllAsRead,
@@ -174,4 +230,3 @@ export function useNotifications() {
   }
   return ctx;
 }
-
