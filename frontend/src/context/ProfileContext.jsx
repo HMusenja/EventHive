@@ -1,4 +1,3 @@
-// src/context/ProfileContext.jsx
 import {
   createContext,
   useContext,
@@ -55,7 +54,7 @@ export function ProfileProvider({ children }) {
     if (typeof arr === "string") {
       arr = arr.split(",").map((s) => s.trim());
     }
-    if (!Array.isArray(arr)) return undefined; 
+    if (!Array.isArray(arr)) return undefined;
     return [
       ...new Set(
         arr.map((s) => String(s).trim().toLowerCase()).filter(Boolean)
@@ -83,29 +82,29 @@ export function ProfileProvider({ children }) {
 
   const saveProfile = useCallback(
     async (partial) => {
-     const { email, ...rest } = partial || {}; // never send email from here
-    const normalized = { ...rest };
-    if (typeof rest.interests !== "undefined") {
-      const tags = normalizeInterests(rest.interests);
-      if (tags) normalized.interests = tags; // only include if valid array after normalization
-      else delete normalized.interests;      // drop invalid shapes
-    }
+      const { email, ...rest } = partial || {}; // never send email from here
+      const normalized = { ...rest };
+      if (typeof rest.interests !== "undefined") {
+        const tags = normalizeInterests(rest.interests);
+        if (tags) normalized.interests = tags; // only include if valid array after normalization
+        else delete normalized.interests;      // drop invalid shapes
+      }
 
-    // optimistic update (use normalized shape so UI reflects what we’ll persist)
-    dispatch({ type: UPDATE, payload: normalized });
+      // optimistic update (use normalized shape so UI reflects what we’ll persist)
+      dispatch({ type: UPDATE, payload: normalized });
       try {
-     const serverRes = await updateMyProfile(normalized);
-     // api may return { profile } or raw profile — handle both
-     const updatedProfile = serverRes?.profile || serverRes;
-     dispatch({ type: UPDATE, payload: updatedProfile });
-     return { ok: true, profile: updatedProfile };
+        const serverRes = await updateMyProfile(normalized);
+        // api may return { profile } or raw profile — handle both
+        const updatedProfile = serverRes?.profile || serverRes;
+        dispatch({ type: UPDATE, payload: updatedProfile });
+        return { ok: true, profile: updatedProfile };
       } catch (e) {
         // reload to recover
         await load();
         return { ok: false, error: e?.response?.data?.message || e.message };
       }
     },
-    [load,normalizeInterests]
+    [load, normalizeInterests]
   );
 
   const value = useMemo(

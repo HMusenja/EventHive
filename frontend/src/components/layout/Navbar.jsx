@@ -1,5 +1,5 @@
-// src/components/nav/Navbar.jsx
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   Menu,
@@ -10,10 +10,8 @@ import {
   ChevronDown,
   UserRound,
   MessageSquareText,
-  Bell, // ⬅️ added
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { Link, useNavigate } from "react-router-dom";
 import {
   Sheet,
   SheetTrigger,
@@ -31,19 +29,17 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { useTheme } from "@/context/ThemeContext";
 import ThemeToggle from "./ThemeToggle";
 import AuthModal from "../AuthModal";
 import GlobalChatButton from "@/components/nav/GlobalChatButton";
 import { useToast } from "@/hooks/use-toast";
-import { useNotifications } from "@/context/NotificationContext"; // ⬅️ added
-
+import { useNotifications } from "@/context/NotificationContext";
 import SafeAvatar from "@/shared/SafeAvatar";
+import NotificationBell from "@/components/nav/NotificationBell";
 
 function relativeTime(ts) {
   if (!ts) return "Just now";
-  const d =
-    typeof ts === "string" || typeof ts === "number" ? new Date(ts) : ts;
+  const d = typeof ts === "string" || typeof ts === "number" ? new Date(ts) : ts;
   const diff = Math.max(0, Date.now() - d.getTime());
   const s = Math.floor(diff / 1000);
   if (s < 60) return `${s}s ago`;
@@ -61,33 +57,40 @@ function relativeTime(ts) {
   return `${years}y ago`;
 }
 
-// ⬇️ tiny presentation helper for the list
 function iconFor(n) {
   if (n.type === "message") return "💬";
   if (n.type === "checkin") return "✅";
-  return "🔔"; // system/default
+  if (n.type === "meeting") return "📅";
+  return "🔔";
 }
 
 export default function Navbar() {
   const { user, logout, refreshMe, loading, initialized } = useAuth();
   const navigate = useNavigate();
-  const { theme, toggleTheme } = useTheme();
+  const {
+    notifications,
+    unreadCount,
+    markNotificationRead,
+    removeNotification,
+    markAllAsRead,
+    fetchNotifications,
+    resetNotifications,
+  } = useNotifications();
   const { toast } = useToast();
-
-  // ⬇️ notifications from context
-  const { notifications, unreadCount, markRead, removeOne } = useNotifications();
 
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState("login");
 
   async function handleAuthSuccess() {
     await refreshMe();
+    await fetchNotifications(); // pull fresh notifications after login
     navigate("/account");
   }
 
   async function handleLogout() {
     try {
       await logout();
+      resetNotifications(); // drop all notifications immediately on logout
       toast({
         title: "You’re logged out",
         description: "We hope to see you again soon ✨",
@@ -117,6 +120,46 @@ export default function Navbar() {
     return relativeTime(ts);
   }, [user]);
 
+  const resolveNotificationLink = (n) => {
+    if (n?.meta?.link) return n.meta.link;
+    switch (n?.type) {
+      case "checkin":
+        return n?.meta?.eventId ? `/events/${n.meta.eventId}` : "/events";
+      case "meeting":
+        return n?.meta?.meetingId
+          ? `/account/meetings/${n.meta.meetingId}`
+          : "/account/meetings";
+      default:
+        // if a meetingId slipped in without a type:
+        if (n?.meta?.meetingId) return "/account/meetings";
+        return "/account";
+    }
+  };
+
+  const handleNotificationClick = async (n) => {
+    if (!isAuthed) {
+      setAuthMode("login");
+      setAuthOpen(true);
+      toast({
+        title: "Please sign in",
+        description: "Log in to open this notification.",
+      });
+      return;
+    }
+    try {
+      await markNotificationRead(n._id);
+    } finally {
+      navigate(resolveNotificationLink(n));
+    }
+  };
+
+  useEffect(() => {
+    if (isAuthed) fetchNotifications();
+    else resetNotifications();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthed]);
+
+  // ---------- RENDER ----------
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -161,74 +204,21 @@ export default function Navbar() {
               <Search className="mr-2 h-4 w-4" /> Search
             </Button>
 
-            {/* ⬇️ Global Chat */}
+            {/* Global Chat */}
             <GlobalChatButton />
 
-            {/* ⬇️ Notifications bell */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  className="relative inline-flex items-center justify-center h-9 w-9 rounded-xl border border-border hover:bg-muted transition"
-                  aria-label="Notifications"
-                >
-                  <Bell className="h-4 w-4" />
-                  {unreadCount > 0 && (
-                    <span className="absolute -top-1 -right-1 text-[10px] leading-none rounded-full bg-destructive text-destructive-foreground px-1.5 py-1">
-                      {unreadCount > 9 ? "9+" : unreadCount}
-                    </span>
-                  )}
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-80 p-0 overflow-hidden">
-                <div className="flex items-center justify-between px-3 py-2">
-                  <div className="font-semibold">Notifications</div>
-                  <div className="text-xs text-muted-foreground">{unreadCount} unread</div>
-                </div>
-                <div className="max-h-80 overflow-auto divide-y">
-                  {notifications.length === 0 ? (
-                    <div className="p-4 text-sm text-muted-foreground">No notifications yet</div>
-                  ) : (
-                    notifications.map((n) => (
-                      <div key={n._id} className="flex items-start gap-3 p-3">
-                        <div className="text-lg">{iconFor(n)}</div>
-                        <div className="min-w-0 flex-1">
-                          <div className="text-sm font-medium">{n.title}</div>
-                          <div className="text-xs text-muted-foreground break-words">{n.message}</div>
-                          {n.meta?.meetingId && (
-                            <a href="/meetings" className="text-xs text-primary underline">
-                              Open meeting
-                            </a>
-                          )}
-                          {n.readAt == null && (
-                            <button
-                              className="mt-1 text-xs text-primary"
-                              onClick={() => markRead(n._id)}
-                            >
-                              Mark as read
-                            </button>
-                          )}
-                        </div>
-                        <button
-                          className="text-xs text-muted-foreground"
-                          onClick={() => removeOne(n._id)}
-                          aria-label="Remove notification"
-                          title="Remove"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {/* Notifications bell */}
+            <NotificationBell
+              className="relative inline-flex items-center justify-center h-9 w-9 rounded-xl border border-border hover:bg-muted transition"
+              badgeClassName="absolute -top-1 -right-1 text-[10px] leading-none rounded-full bg-destructive text-destructive-foreground px-1.5 py-1"
+            />
 
             {/* Desktop: user dropdown */}
             <div className="hidden md:flex items-center">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button className="inline-flex items-center gap-2 rounded-xl border border-border px-2.5 py-1.5 hover:bg-muted transition">
-                  <SafeAvatar src={user?.avatarUrl} name={user?.displayName} className="h-7 w-7" />
+                    <SafeAvatar src={user?.avatarUrl} name={user?.displayName} className="h-7 w-7" />
                     <span className="text-sm font-medium">{displayName}</span>
                     <ChevronDown className="h-4 w-4" />
                   </button>
@@ -293,7 +283,11 @@ export default function Navbar() {
                 <div className="mt-6 space-y-4">
                   {/* User header */}
                   <div className="flex items-center gap-3">
-                  <SafeAvatar src={user?.avatarUrl} name={user?.displayName} className="h-7 w-7" />
+                    <SafeAvatar
+                      src={user?.avatarUrl}
+                      name={user?.displayName}
+                      className="h-7 w-7"
+                    />
                     <div className="text-sm">
                       <div className="font-semibold">{displayName}</div>
                       <div className="text-muted-foreground flex items-center gap-1">
@@ -307,12 +301,20 @@ export default function Navbar() {
 
                   {/* Mobile links */}
                   <div className="grid gap-2">
-                    <a href="#events" className="text-sm text-foreground">Events</a>
-                    <a href="#features" className="text-sm text-foreground">Features</a>
-                    <a href="#about" className="text-sm text-foreground">About</a>
-                    <a href="#blog" className="text-sm text-foreground">Blog</a>
+                    <a href="#events" className="text-sm text-foreground">
+                      Events
+                    </a>
+                    <a href="#features" className="text-sm text-foreground">
+                      Features
+                    </a>
+                    <a href="#about" className="text-sm text-foreground">
+                      About
+                    </a>
+                    <a href="#blog" className="text-sm text-foreground">
+                      Blog
+                    </a>
 
-                    {/* ⬇️ Global Chat */}
+                    {/* Global Chat */}
                     <SheetClose asChild>
                       <Link
                         to="/chat/global"

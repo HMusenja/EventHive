@@ -6,10 +6,19 @@ import Attendee from "../models/Attendee.js";
 /* ----------------------------- helpers ----------------------------- */
 
 // Create a Notification matching your schema: { userId, type, title, message, meta }
-async function createNotification({ userId, type = "system", title, message, meta = {} }) {
+async function createNotification({ userId, type = "system", title = "New message", message = "You’ve got a reply.", meta = {} }) {
     try {
         const { default: Notification } = await import("../models/Notification.js");
-        await Notification.create({ userId, type, title, message, meta });
+        await Notification.create({
+            userId,
+            type,
+            title,
+            message,
+            meta: {
+                link: `/messages/${threadId}`,  // <— the deep link
+                threadId,
+            },
+        });
     } catch (e) {
         console.warn("[meetings] createNotification failed:", e?.message || e);
     }
