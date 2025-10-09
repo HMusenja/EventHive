@@ -71,7 +71,7 @@ export const listEventTickets = (eventId) =>
 // Organizer: create a ticket type for an event
 export const createEventTicket = async (eventId, data) => {
   try {
-    const r = await axios.post(`/tickets/events/${eventId}`, data);
+    const r = await axios.post(`/api/tickets/events/${eventId}`, data);
     return r.data?.ticket;
   } catch (err) {
     const res = err?.response?.data;

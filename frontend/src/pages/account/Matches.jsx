@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useEffect, useMemo, useState, useCallback } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import {
   Heart,
   MessageCircle,
@@ -15,19 +15,33 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
-import ScheduleMeetingModal from "@/components/meetings/ScheduleMeetingModal";
 import RequestMeetingModal from "@/components/meetings/RequestMeetingModal";
 import { fetchEventAttendees } from "@/api/meetingsApi";
 import { fetchGlobalMatches as getMatchSuggestions } from "@/api/matchApi";
+
+// ✅ new utils for server-side viewed + connected from meetings
+import {
+  fetchViewedIdsServer,
+  recordViewedServer,
+  connectedIdsFromMeetings,
+  deriveStatusFor,
+} from "@/utils/matchActivity";
 
 const HEX24 = /^[0-9a-fA-F]{24}$/;
 
 export default function Matches() {
   const { eventId } = useParams(); // optional: /events/:eventId/matches
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -38,6 +52,10 @@ export default function Matches() {
   const [people, setPeople] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // activity state (server viewed + meetings-connected)
+  const [viewedIds, setViewedIds] = useState(new Set());
+  const [connectedIds, setConnectedIds] = useState(new Set());
+
   // modal state
   const [isScheduleOpen, setScheduleOpen] = useState(false);
   const [presetInviteeId, setPresetInviteeId] = useState(null);
@@ -45,12 +63,71 @@ export default function Matches() {
   // counts of requests you've sent this session, keyed by inviteeId
   const [sentCounts, setSentCounts] = useState({});
 
+  // --- helpers
+  const getStatusColor = (status) => {
+    switch (status) {
+      case "new":
+        return "bg-gradient-to-r from-green-400 to-green-600";
+      case "viewed":
+        return "bg-gradient-to-r from-blue-400 to-blue-600";
+      case "connected":
+        return "bg-gradient-to-r from-purple-400 to-purple-600";
+      case "requested":
+        return "bg-gradient-to-r from-amber-400 to-amber-600";
+      default:
+        return "bg-gradient-to-r from-gray-400 to-gray-600";
+    }
+  };
+
+  const getMatchScoreColor = (score) => {
+    if (score >= 90) return "text-green-600";
+    if (score >= 80) return "text-blue-600";
+    if (score >= 70) return "text-yellow-600";
+    return "text-red-600";
+  };
+
+  const getInviteeId = (p) => String(p.id || "").trim();
+
+  const statusOf = useCallback(
+    (p) => deriveStatusFor(p, { viewedIds, connectedIds }),
+    [viewedIds, connectedIds]
+  );
+
+  // navigate to public profiles + record 'viewed' (server-side)
+  const openPublicProfile = async (m) => {
+    const idOrUsername = m?.username || m?.id;
+    if (!idOrUsername) return;
+    const id = String(m?.id || "");
+    if (id) {
+      try {
+        await recordViewedServer(id);
+        // reflect locally
+        setViewedIds((prev) => {
+          if (prev.has(id)) return prev;
+          const next = new Set(prev);
+          next.add(id);
+          return next;
+        });
+      } catch {
+        // ignore network errors for best-effort logging
+      }
+    }
+    navigate(`/u/${idOrUsername}`);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   // when a meeting request is created successfully
   function handleMeetingRequested(inviteeId) {
-    setSentCounts(prev => ({
+    setSentCounts((prev) => ({
       ...prev,
       [inviteeId]: (prev[inviteeId] || 0) + 1,
     }));
+    // optimistic: treat as connected
+    setConnectedIds((prev) => {
+      const next = new Set(prev);
+      next.add(String(inviteeId));
+      return next;
+    });
   }
 
   // ---- Load data (event attendees OR global matches) ----
@@ -82,7 +159,12 @@ export default function Matches() {
           const matches = await getMatchSuggestions();
           const list = (matches || []).map((m) => ({
             id: String(m.userId || m._id || m.user?._id || m.id || ""),
-            name: m.name || m.fullName || m.user?.fullName || m.user?.username || "Unknown",
+            name:
+              m.name ||
+              m.fullName ||
+              m.user?.fullName ||
+              m.user?.username ||
+              "Unknown",
             role: m.user?.title || m.role || "Member",
             company: m.user?.company || m.company || "",
             location: m.user?.location || m.location || "",
@@ -90,7 +172,8 @@ export default function Matches() {
             matchScore: m.matchScore ?? 80,
             bio: m.user?.bio || m.bio || "",
             interests: m.user?.interests || m.interests || [],
-            mutualConnections: m.user?.mutualConnections || m.mutualConnections || 0,
+            mutualConnections:
+              m.user?.mutualConnections || m.mutualConnections || 0,
             status: m.status || "new",
           }));
           if (mounted) setPeople(list);
@@ -110,25 +193,33 @@ export default function Matches() {
     };
   }, [eventId, toast]);
 
-  // ---- Helpers ----
-  const getStatusColor = (status) => {
-    switch (status) {
-      case "new": return "bg-gradient-to-r from-green-400 to-green-600";
-      case "viewed": return "bg-gradient-to-r from-blue-400 to-blue-600";
-      case "connected": return "bg-gradient-to-r from-purple-400 to-purple-600";
-      case "requested": return "bg-gradient-to-r from-amber-400 to-amber-600";
-      default: return "bg-gradient-to-r from-gray-400 to-gray-600";
-    }
-  };
+  // ---- hydrate viewed from server ----
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const set = await fetchViewedIdsServer({ limit: 500 });
+        if (mounted) setViewedIds(set);
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
-  const getMatchScoreColor = (score) => {
-    if (score >= 90) return "text-green-600";
-    if (score >= 80) return "text-blue-600";
-    if (score >= 70) return "text-yellow-600";
-    return "text-red-600";
-  };
-
-  const getInviteeId = (p) => String(p.id || "").trim();
+  // ---- hydrate connected from meetings ----
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const set = await connectedIdsFromMeetings(user?._id);
+      if (mounted) setConnectedIds(set);
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [user?._id]);
 
   // ---- Filter UI list ----
   const filtered = useMemo(() => {
@@ -138,10 +229,22 @@ export default function Matches() {
         (p.name || "").toLowerCase().includes(term) ||
         (p.role || "").toLowerCase().includes(term) ||
         (p.company || "").toLowerCase().includes(term);
-      const matchesFilter = filterBy === "all" || p.status === filterBy;
+
+      const s = statusOf(p);
+      const matchesFilter =
+        filterBy === "all"
+          ? true
+          : filterBy === "new"
+          ? s === "new"
+          : filterBy === "viewed"
+          ? s === "viewed"
+          : filterBy === "connected"
+          ? s === "connected"
+          : true;
+
       return matchesSearch && matchesFilter;
     });
-  }, [people, searchTerm, filterBy]);
+  }, [people, searchTerm, filterBy, statusOf]);
 
   // ---- Modal open ----
   function openSchedule(id) {
@@ -156,6 +259,12 @@ export default function Matches() {
     setPresetInviteeId(String(id));
     setScheduleOpen(true);
   }
+
+  // computed metric: total connected using derived status
+  const connectedCount = useMemo(
+    () => people.filter((m) => statusOf(m) === "connected").length,
+    [people, statusOf]
+  );
 
   return (
     <div className="space-y-6">
@@ -206,8 +315,12 @@ export default function Matches() {
                 <Heart className="h-5 w-5 text-white" />
               </div>
               <div>
-                <p className="text-sm font-medium text-green-800 dark:text-green-200">Total Matches</p>
-                <p className="text-2xl font-bold text-green-900 dark:text-green-100">{people.length}</p>
+                <p className="text-sm font-medium text-green-800 dark:text-green-200">
+                  Total Matches
+                </p>
+                <p className="text-2xl font-bold text-green-900 dark:text-green-100">
+                  {people.length}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -220,9 +333,11 @@ export default function Matches() {
                 <MessageCircle className="h-5 w-5 text-white" />
               </div>
               <div>
-                <p className="text-sm font-medium text-blue-800 dark:text-blue-200">Connected</p>
+                <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                  Connected
+                </p>
                 <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">
-                  {people.filter((m) => m.status === "connected").length}
+                  {connectedCount}
                 </p>
               </div>
             </div>
@@ -236,13 +351,17 @@ export default function Matches() {
                 <Star className="h-5 w-5 text-white" />
               </div>
               <div>
-                <p className="text-sm font-medium text-purple-800 dark:text-purple-200">Avg Match Score</p>
+                <p className="text-sm font-medium text-purple-800 dark:text-purple-200">
+                  Avg Match Score
+                </p>
                 <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">
                   {people.length
                     ? Math.round(
-                      people.reduce((sum, m) => sum + (m.matchScore || 0), 0) /
-                      people.length
-                    )
+                        people.reduce(
+                          (sum, m) => sum + (m.matchScore || 0),
+                          0
+                        ) / people.length
+                      )
                     : 0}
                   %
                 </p>
@@ -259,6 +378,7 @@ export default function Matches() {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {filtered.map((match) => {
             const inviteeId = getInviteeId(match);
+            const status = statusOf(match);
             const sent = sentCounts[inviteeId] || 0;
 
             // allow schedule if we have an id and (in event mode the id looks like ObjectId)
@@ -275,14 +395,26 @@ export default function Matches() {
                 <CardHeader className="pb-4">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
-                      <Avatar className="h-16 w-16 border-2 border-primary/20">
+                      <Avatar
+                        className="h-16 w-16 border-2 border-primary/20 cursor-pointer"
+                        onClick={() => openPublicProfile(match)}
+                      >
                         <AvatarImage src={match.avatar} />
                         <AvatarFallback className="bg-gradient-to-br from-primary to-secondary text-primary-foreground text-lg">
-                          {match.name?.split(" ").map((n) => n[0]).join("")}
+                          {match.name
+                            ?.split(" ")
+                            .map((n) => n[0])
+                            .join("")}
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex-1">
-                        <CardTitle className="text-lg">{match.name}</CardTitle>
+                        <CardTitle
+                          className="text-lg hover:underline cursor-pointer"
+                          onClick={() => openPublicProfile(match)}
+                          title="View public profile"
+                        >
+                          {match.name}
+                        </CardTitle>
                         <div className="flex items-center gap-1 text-sm text-muted-foreground">
                           <Briefcase className="h-3 w-3" />
                           {match.role}
@@ -297,15 +429,19 @@ export default function Matches() {
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-1">
-                      <Badge className={`${getStatusColor(match.status)} text-white border-0`}>
-                        {match.status}
+                      <Badge
+                        className={`${getStatusColor(status)} text-white border-0`}
+                      >
+                        {status}
                       </Badge>
                       {sent > 0 && (
                         <Badge variant="outline" className="text-xs">
                           requested{sent > 1 ? ` ×${sent}` : ""}
                         </Badge>
                       )}
-                      <div className={`text-sm font-semibold ${getMatchScoreColor(match.matchScore)}`}>
+                      <div
+                        className={`text-sm font-semibold ${getMatchScoreColor(match.matchScore)}`}
+                      >
                         {match.matchScore}% match
                       </div>
                     </div>
@@ -323,7 +459,11 @@ export default function Matches() {
                     <div className="space-y-2">
                       <div className="flex flex-wrap gap-1">
                         {match.interests.slice(0, 3).map((interest, i) => (
-                          <Badge key={i} variant="secondary" className="text-xs">
+                          <Badge
+                            key={i}
+                            variant="secondary"
+                            className="text-xs"
+                          >
                             {interest}
                           </Badge>
                         ))}
@@ -343,10 +483,19 @@ export default function Matches() {
                     <Button
                       size="sm"
                       className="flex-1 bg-gradient-to-r from-primary to-secondary"
-                      disabled={match.status === "connected"}
+                      disabled={status === "connected"}
+                      onClick={() => {
+                        // TODO: open chat UI here
+                        // optimistic: mark connected on first message action
+                        setConnectedIds((prev) => {
+                          const next = new Set(prev);
+                          next.add(inviteeId);
+                          return next;
+                        });
+                      }}
                     >
                       <MessageCircle className="h-4 w-4 mr-2" />
-                      {match.status === "connected" ? "Connected" : "Message"}
+                      {status === "connected" ? "Connected" : "Message"}
                     </Button>
 
                     <Button
@@ -357,15 +506,18 @@ export default function Matches() {
                         canSchedule
                           ? openSchedule(inviteeId)
                           : toast({
-                            title: "Unavailable for scheduling",
-                            description: "This profile can’t be scheduled right now.",
-                            variant: "destructive",
-                          })
+                              title: "Unavailable for scheduling",
+                              description:
+                                "This profile can’t be scheduled right now.",
+                              variant: "destructive",
+                            })
                       }
                       disabled={!canSchedule}
                       title={
                         canSchedule
-                          ? (sent > 0 ? `Requested${sent > 1 ? ` ×${sent}` : ""}` : "Schedule a meeting")
+                          ? sent > 0
+                            ? `Requested${sent > 1 ? ` ×${sent}` : ""}`
+                            : "Schedule a meeting"
                           : "Unavailable for scheduling"
                       }
                     >
@@ -396,19 +548,11 @@ export default function Matches() {
         </div>
       )}
 
-      {/* ✅ OLD POPUP MODAL (works global or event-scoped)
-      <ScheduleMeetingModal
-        isOpen={isScheduleOpen}
-        onClose={() => setScheduleOpen(false)}
-        presetInviteeId={presetInviteeId}
-        eventId={eventId || undefined}
-      />*/}
       <RequestMeetingModal
         open={isScheduleOpen}
         onClose={() => setScheduleOpen(false)}
         hostId={presetInviteeId}
         eventId={eventId}
-
         presetInviteeId={presetInviteeId}
         sentCount={sentCounts[presetInviteeId] || 0}
         onCreated={(_meeting, idFromModal) => {
@@ -418,3 +562,4 @@ export default function Matches() {
     </div>
   );
 }
+

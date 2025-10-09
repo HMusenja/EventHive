@@ -5,6 +5,7 @@ import Register from "@/pages/Register";
 import EventDetail from "@/pages/EventDetail";
 import EventList from "@/pages/EventList";
 import EditEventPage from "@/pages/events/EditEventPage";
+import PublicProfile from "@/pages/PublicProfile"; 
 import Dashboard from "@/pages/dashboard/Dashboard";
 import OrganizerLayout from "@/pages/OrganizerLayout";
 import Sales from "@/pages/dashboard/organizer/Sales";
@@ -39,6 +40,8 @@ export default function AppRoutes() {
     <Routes>
       {/* Public routes wrapped with AppShell */}
       <Route element={<AppShell />}>
+        
+        <Route path="/u/:userId" element={<PublicProfile />} />
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />

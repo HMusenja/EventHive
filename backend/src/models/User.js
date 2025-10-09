@@ -86,6 +86,12 @@ const UserSchema = new Schema(
     avatar: { type: String, default: "" },
     bio: { type: String, maxlength: 600 },
     interests: [{ type: String, trim: true, lowercase: true }],
+    location: { type: String, trim: true, default: "" },
+    company: { type: String, trim: true, default: "" },
+    role: { type: String, trim: true, default: "" }, // job title
+    education: { type: String, trim: true, default: "" },
+    skills: [{ type: String, trim: true, lowercase: true }],
+    goals: [{ type: String, trim: true, lowercase: true }],
     profileVisibility: {
       type: String,
       enum: VisibilityEnum,

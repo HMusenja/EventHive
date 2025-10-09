@@ -120,7 +120,7 @@ async function main() {
     endAt: addDays(now, 10 + 1),
     coverImage: "https://picsum.photos/seed/live/1200/600",
     tickets: [
-      { name: "VIP", priceCents: 15050, quantityTotal: 50, quantitySold: 10 },
+      { name: "VIP", priceCents: 15000, quantityTotal: 50, quantitySold: 10 },
       { name: "Standard", priceCents: 7000, quantityTotal: 200, quantitySold: 50 },
       { name: "Free", priceCents: 0, quantityTotal: 100, quantitySold: 5 },
     ],
@@ -136,7 +136,7 @@ async function main() {
     coverImage: "https://picsum.photos/seed/ended/1200/600",
     tickets: [
       { name: "VIP", priceCents: 12000, quantityTotal: 30, quantitySold: 28 },
-      { name: "Standard", priceCents: 5050, quantityTotal: 150, quantitySold: 120 },
+      { name: "Standard", priceCents: 5000, quantityTotal: 150, quantitySold: 120 },
       { name: "Free", priceCents: 0, quantityTotal: 50, quantitySold: 40 },
     ],
   });
@@ -165,7 +165,7 @@ async function main() {
     endAt: addDays(now, 31),
     coverImage: "https://picsum.photos/seed/draft/1200/600",
     tickets: [
-      { name: "VIP", priceCents: 15050, quantityTotal: 10 },
+      { name: "VIP", priceCents: 15000, quantityTotal: 10 },
       { name: "Standard", priceCents: 4000, quantityTotal: 80 },
       { name: "Free", priceCents: 0, quantityTotal: 20 },
     ],

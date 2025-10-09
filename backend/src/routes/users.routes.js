@@ -11,6 +11,7 @@ import {
   getMyProfile,
   updateMyProfile,
   getMySummary,
+    getPublicProfile,
 } from "../controllers/profileController.js";
 
 const router = express.Router();
@@ -28,5 +29,7 @@ router.get("/", checkToken, listUsers);
 router.get("/me/profile", checkToken, getMyProfile);
 router.put("/me/profile", checkToken, updateMyProfile);
 router.get("/me/summary", checkToken, getMySummary);
+
+router.get("/:idOrUsername/public",  getPublicProfile);
 
 export default router;
