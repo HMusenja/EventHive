@@ -1,4 +1,4 @@
-@baseUrl = http://localhost:5050/api
+@baseUrl = http://localhost:5000/api
 @eventId = 68bc3acd967afbc1b243b2e6
 # If using Bearer tokens, paste the JWT here:
 @authToken = REPLACE_WITH_JWT

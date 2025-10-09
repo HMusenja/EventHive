@@ -1,12 +1,12 @@
 // import axios from "axios";
 
 // // Step 1: Base URL setup
-// const baseURL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5050/api";
+// const baseURL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
 // const finalBase = baseURL.endsWith("/api") ? baseURL : `${baseURL}`;
 
 // // Step 2: Create axios instance with default settings
 // const api = axios.create({
-//     baseURL: import.meta.env.VITE_API_URL || "http://localhost:5050/api", // adjust port if backend runs elsewhere
+//     baseURL: import.meta.env.VITE_API_URL || "http://localhost:5000/api", // adjust port if backend runs elsewhere
 //     withCredentials: true, // ensures cookies (JWT/session) are sent if your backend sets them
 // });
 
@@ -41,6 +41,6 @@
 import axios from "axios";
 
 export const setAxiosDefaults = () => {
-    axios.defaults.baseURL = "http://localhost:5050";
+    axios.defaults.baseURL = "http://localhost:5000";
     axios.defaults.withCredentials = true;
 };

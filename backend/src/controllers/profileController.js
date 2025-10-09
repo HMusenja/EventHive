@@ -1,4 +1,5 @@
 // controllers/profile.controller.js
+import mongoose from "mongoose";
 import User from "../models/User.js";
 import Attendee from "../models/Attendee.js";
 import Event from "../models/Event.js";
@@ -11,6 +12,12 @@ const PROFILE_PROJECTION = {
   bio: 1,
   interests: 1,
   profileVisibility: 1,
+  location: 1,
+  company: 1,
+  role: 1,
+  education: 1,
+  skills: 1,
+  goals: 1,
   timezone: 1,
   locale: 1,
   notificationPrefs: 1,
@@ -20,6 +27,22 @@ const PROFILE_PROJECTION = {
   updatedAt: 1,
   hasOnboarded: 1,
   onboardedAt: 1,
+};
+
+const PUBLIC_PROFILE_PROJECTION = {
+  fullName: 1,
+  username: 1,
+  avatar: 1,
+  bio: 1,
+  location: 1,
+  company: 1,
+  role: 1,
+  education: 1,
+  interests: 1,
+  skills: 1,
+  goals: 1,
+  createdAt: 1,
+  profileVisibility: 1,
 };
 
 const ALLOWED_UPDATE_FIELDS = new Set([
@@ -33,7 +56,59 @@ const ALLOWED_UPDATE_FIELDS = new Set([
   "notificationPrefs",
   "consents",
   "interests",
+  "location",
+  "company",
+  "role",
+  "education",
+  "skills",
+  "goals",
 ]);
+
+function isObjectId(v) {
+  return mongoose.Types.ObjectId.isValid(v);
+}
+
+export async function getPublicProfile(req, res, next) {
+  try {
+    const { idOrUsername } = req.params;
+    const query = isObjectId(idOrUsername)
+      ? { _id: idOrUsername }
+      : { username: String(idOrUsername).trim().toLowerCase() };
+
+    const user = await User.findOne(query)
+      .select(PUBLIC_PROFILE_PROJECTION)
+      .lean();
+    if (!user) return res.status(404).json({ message: "Profile not found" });
+
+    // visibility
+    if (user.profileVisibility === "private") {
+      return res.status(403).json({ message: "Profile is private" });
+    }
+    if (user.profileVisibility === "connections") {
+      // TODO: implement connection check; for now block unless it’s self
+      const viewerId = req.user?._id?.toString();
+      const isSelf = viewerId && viewerId === user._id?.toString();
+      if (!isSelf)
+        return res
+          .status(403)
+          .json({ message: "Profile visible to connections only" });
+    }
+
+    // Shape public payload
+    const profile = {
+      ...user,
+      joinedDate: user.createdAt
+        ? new Date(user.createdAt).toISOString()
+        : null,
+      mutualConnections: 0, // TODO: compute
+      connectionStatus: "unknown", // TODO: compute: connected|pending|not_connected
+    };
+
+    return res.json({ profile });
+  } catch (err) {
+    next(err);
+  }
+}
 
 export async function getMyProfile(req, res, next) {
   try {
@@ -44,58 +119,87 @@ export async function getMyProfile(req, res, next) {
     next(err);
   }
 }
+const normalizeArrayField = (value, max = 25, maxLen = 30) => {
+  if (typeof value === "undefined") return undefined;
+  let arr = value;
+  if (typeof arr === "string") {
+    arr = arr.split(",").map((s) => s.trim());
+  }
+  if (!Array.isArray(arr)) return [];
+  return [
+    ...new Set(
+      arr
+        .map((s) => String(s).trim().toLowerCase())
+        .filter(Boolean)
+        .map((s) => s.slice(0, maxLen))
+    ),
+  ].slice(0, max);
+};
 
 export async function updateMyProfile(req, res, next) {
+  console.log(
+    "[updateMyProfile] RAW KEYS/TYPES:",
+    Object.entries(req.body || {}).map(([k, v]) => [
+      k,
+      Array.isArray(v) ? "array" : typeof v,
+    ])
+  );
+  console.log("[updateMyProfile] RAW goals =", req.body?.goals);
+
   try {
     const payload = {};
     for (const [k, v] of Object.entries(req.body || {})) {
       if (ALLOWED_UPDATE_FIELDS.has(k)) payload[k] = v;
     }
-    // if user sent interests/bio with content, mark onboarded globally
+
+    // mark onboarded if bio/tags provided
     const wantsOnboard =
       (Array.isArray(payload.interests) && payload.interests.length > 0) ||
-      (typeof payload.bio === "string" && payload.bio.trim().length > 0);
+      (typeof payload.bio === "string" && payload.bio.trim().length > 0) ||
+      (Array.isArray(payload.skills) && payload.skills.length > 0) ||
+      (Array.isArray(payload.goals) && payload.goals.length > 0);
     if (wantsOnboard) {
       payload.hasOnboarded = true;
       payload.onboardedAt = new Date();
     }
-    if (
-      "email" in req.body ||
-      "role" in req.body ||
-      "accountStatus" in req.body
-    ) {
+
+    // block truly sensitive fields
+    if ("email" in req.body || "accountStatus" in req.body) {
       return res
         .status(400)
         .json({ message: "Field not updatable via this endpoint" });
     }
 
-    // ✅ Normalize interests if present
-    if (typeof payload.interests !== "undefined") {
-      let tags = payload.interests;
-      // Accept CSV string as convenience
-      if (typeof tags === "string") {
-        tags = tags
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean);
+    // --- helpers ---
+    const normalizeArrayField = (value, max = 25, maxLen = 30) => {
+      if (typeof value === "undefined") return undefined; // leave untouched if missing
+      let arr = value;
+      if (typeof arr === "string") {
+        arr = arr.split(",").map((s) => s.trim());
       }
-      if (!Array.isArray(tags)) {
-        return res.status(400).json({
-          message:
-            "interests must be an array of strings or comma-separated string",
-        });
-      }
-      const MAX_TAGS = 25;
-      const MAX_LEN = 30;
-      payload.interests = [
+      if (!Array.isArray(arr)) return [];
+      return [
         ...new Set(
-          tags
+          arr
+            .map((s) =>
+              typeof s === "string" ? s : s?.value || s?.label || ""
+            ) // handle tag objects
             .map((s) => String(s).trim().toLowerCase())
             .filter(Boolean)
-            .map((s) => s.slice(0, MAX_LEN))
+            .map((s) => s.slice(0, maxLen))
         ),
-      ].slice(0, MAX_TAGS);
-    }
+      ].slice(0, max);
+    };
+
+    // normalize tag arrays
+    if (typeof payload.interests !== "undefined")
+      payload.interests = normalizeArrayField(payload.interests);
+    if (typeof payload.skills !== "undefined")
+      payload.skills = normalizeArrayField(payload.skills);
+    if (typeof payload.goals !== "undefined")
+      payload.goals = normalizeArrayField(payload.goals);
+
+    console.log("[updateMyProfile] PAYLOAD goals =", payload.goals);
 
     const updated = await User.findByIdAndUpdate(req.user._id, payload, {
       new: true,
